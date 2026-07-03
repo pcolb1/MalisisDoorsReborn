@@ -5,7 +5,6 @@ import dev.mostlyharmless.malisisdoorsreborn.block.CustomSkinnedDoorTarget;
 import dev.mostlyharmless.malisisdoorsreborn.client.render.door.CustomDoorBreakHelper;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.blockentity.HbmFireDoorBlockEntity;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmFireDoorBlockItem;
-import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmScrewdriverItem;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmScrewdriverMode;
 import dev.mostlyharmless.malisisdoorsreborn.network.MdrNetwork;
 import dev.mostlyharmless.malisisdoorsreborn.registry.MdrBlockEntities;
@@ -17,7 +16,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.StringRepresentable;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -25,6 +23,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
@@ -53,7 +52,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import net.minecraftforge.client.extensions.common.IClientBlockExtensions;
+import net.neoforged.neoforge.client.extensions.common.IClientBlockExtensions;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -91,6 +90,7 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
                 .setValue(SKIN, 0));
     }
 
+    @SuppressWarnings("removal")
     @Override
     public void initializeClient(@NotNull final Consumer<IClientBlockExtensions> consumer) {
         CustomDoorBreakHelper.initializeClient(consumer);
@@ -224,22 +224,16 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
     }
 
     @Override
-    public @NotNull InteractionResult use(@NotNull final BlockState state,
-                                          @NotNull final Level level,
-                                          @NotNull final BlockPos pos,
-                                          @NotNull final Player player,
-                                          @NotNull final InteractionHand hand,
-                                          @NotNull final BlockHitResult hit) {
+    public @NotNull InteractionResult useWithoutItem(@NotNull final BlockState state,
+                                                     @NotNull final Level level,
+                                                     @NotNull final BlockPos pos,
+                                                     @NotNull final Player player,
+                                                     @NotNull final BlockHitResult hit) {
         if (level.isClientSide) return InteractionResult.SUCCESS;
         final BlockPos rootPos = rootPos(pos, state);
         final BlockState root = level.getBlockState(rootPos);
         if (!(root.getBlock() instanceof final HbmFireDoorBlock doorBlock)) return InteractionResult.PASS;
         if (isDoorMoving(level, rootPos, root)) return InteractionResult.CONSUME;
-
-        final ItemStack held = player.getItemInHand(hand);
-        if (player.isShiftKeyDown() && held.is(MdrItems.HBM_SCREWDRIVER.get())) {
-            return doorBlock.applyHbmScrewdriverMode(level, pos, state, player, HbmScrewdriverItem.modeFromStack(held));
-        }
 
         if (!doorBlock.canManualToggle(level, rootPos)) return InteractionResult.CONSUME;
         doorBlock.setDoorOpen(level, rootPos, !root.getValue(OPEN), player);
@@ -343,10 +337,10 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
     }
 
     @Override
-    public void playerWillDestroy(@NotNull final Level level,
-                                  @NotNull final BlockPos pos,
-                                  @NotNull final BlockState state,
-                                  @NotNull final Player player) {
+    public @NotNull BlockState playerWillDestroy(@NotNull final Level level,
+                                                 @NotNull final BlockPos pos,
+                                                 @NotNull final BlockState state,
+                                                 @NotNull final Player player) {
         if (!level.isClientSide && !player.isCreative()) {
             final BlockPos rootPos = rootPos(pos, state);
             final BlockState root = level.getBlockState(rootPos);
@@ -354,11 +348,11 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
                 level.destroyBlock(rootPos, true, player);
             }
         }
-        super.playerWillDestroy(level, pos, state, player);
+        return super.playerWillDestroy(level, pos, state, player);
     }
 
     @Override
-    public @NotNull ItemStack getCloneItemStack(@NotNull final BlockGetter level,
+    public @NotNull ItemStack getCloneItemStack(@NotNull final LevelReader level,
                                                 @NotNull final BlockPos pos,
                                                 @NotNull final BlockState state) {
         final BlockPos rootPos = rootPos(pos, state);

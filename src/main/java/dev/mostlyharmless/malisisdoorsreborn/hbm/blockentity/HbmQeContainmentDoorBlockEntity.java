@@ -7,6 +7,7 @@ import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmQeContainmentDoorBlockI
 import dev.mostlyharmless.malisisdoorsreborn.registry.MdrBlockEntities;
 import dev.mostlyharmless.malisisdoorsreborn.network.MdrNetwork;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
@@ -149,37 +150,41 @@ public class HbmQeContainmentDoorBlockEntity extends BlockEntity {
 
 
     @Override
-    protected void saveAdditional(@NotNull final CompoundTag tag) {
-        super.saveAdditional(tag);
+    protected void saveAdditional(@NotNull final CompoundTag tag, @NotNull final HolderLookup.Provider registries) {
+        super.saveAdditional(tag, registries);
         tag.putInt("SkinIndex", skinIndex);
         tag.putInt("RedstoneMode", redstoneMode.ordinal());
     }
 
     @Override
-    public void load(@NotNull final CompoundTag tag) {
-        super.load(tag);
+    protected void loadAdditional(@NotNull final CompoundTag tag, @NotNull final HolderLookup.Provider registries) {
+        super.loadAdditional(tag, registries);
         loadShared(tag);
         snapProgressToState(getBlockState());
     }
 
     @Override
-    public @NotNull CompoundTag getUpdateTag() {
-        return saveWithoutMetadata();
+    public @NotNull CompoundTag getUpdateTag(@NotNull final HolderLookup.Provider registries) {
+        final CompoundTag tag = new CompoundTag();
+        saveAdditional(tag, registries);
+        return tag;
     }
 
     @Override
-    public @Nullable ClientboundBlockEntityDataPacket getUpdatePacket() {
+    public void handleUpdateTag(@NotNull final CompoundTag tag,
+                                @NotNull final HolderLookup.Provider registries) {
+        loadShared(tag);
+    }
+
+    @Override
+    public ClientboundBlockEntityDataPacket getUpdatePacket() {
         return ClientboundBlockEntityDataPacket.create(this);
     }
 
     @Override
-    public void onDataPacket(final Connection net, final ClientboundBlockEntityDataPacket pkt) {
-        final CompoundTag tag = pkt.getTag();
-        if (tag != null) loadShared(tag);
-    }
-
-    @Override
-    public @NotNull AABB getRenderBoundingBox() {
-        return new AABB(worldPosition.offset(-4, 0, -4), worldPosition.offset(4, 5, 4));
+    public void onDataPacket(@NotNull final Connection net,
+                             @NotNull final ClientboundBlockEntityDataPacket pkt,
+                             @NotNull final HolderLookup.Provider registries) {
+        loadShared(pkt.getTag());
     }
 }

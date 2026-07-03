@@ -6,6 +6,7 @@ import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmVehicleDoorBlock;
 import dev.mostlyharmless.malisisdoorsreborn.registry.MdrBlockEntities;
 import dev.mostlyharmless.malisisdoorsreborn.network.MdrNetwork;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
@@ -16,7 +17,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -148,22 +148,24 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity {
 
 
     @Override
-    protected void saveAdditional(@NotNull final CompoundTag tag) {
-        super.saveAdditional(tag);
+    protected void saveAdditional(@NotNull final CompoundTag tag, @NotNull final HolderLookup.Provider registries) {
+        super.saveAdditional(tag, registries);
         tag.putInt("SkinIndex", skinIndex);
         tag.putInt("RedstoneMode", redstoneMode.ordinal());
     }
 
     @Override
-    public void load(@NotNull final CompoundTag tag) {
-        super.load(tag);
+    protected void loadAdditional(@NotNull final CompoundTag tag, @NotNull final HolderLookup.Provider registries) {
+        super.loadAdditional(tag, registries);
         loadShared(tag);
         snapProgressToState(getBlockState());
     }
 
     @Override
-    public @NotNull CompoundTag getUpdateTag() {
-        return saveWithoutMetadata();
+    public @NotNull CompoundTag getUpdateTag(@NotNull final HolderLookup.Provider registries) {
+        final CompoundTag tag = new CompoundTag();
+        saveAdditional(tag, registries);
+        return tag;
     }
 
     @Override
@@ -172,13 +174,15 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity {
     }
 
     @Override
-    public void onDataPacket(final Connection net, final ClientboundBlockEntityDataPacket pkt) {
-        final CompoundTag tag = pkt.getTag();
-        if (tag != null) loadShared(tag);
+    public void handleUpdateTag(@NotNull final CompoundTag tag,
+                                @NotNull final HolderLookup.Provider registries) {
+        loadShared(tag);
     }
 
     @Override
-    public @NotNull AABB getRenderBoundingBox() {
-        return new AABB(worldPosition.offset(-6, 0, -6), worldPosition.offset(6, 7, 6));
+    public void onDataPacket(@NotNull final Connection net,
+                             @NotNull final ClientboundBlockEntityDataPacket pkt,
+                             @NotNull final HolderLookup.Provider registries) {
+        loadShared(pkt.getTag());
     }
 }

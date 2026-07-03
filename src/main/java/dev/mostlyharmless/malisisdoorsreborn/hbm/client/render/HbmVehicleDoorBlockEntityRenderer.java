@@ -12,11 +12,12 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.NotNull;
-import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
 import java.io.BufferedReader;
@@ -42,6 +43,15 @@ public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<Hb
     @Override
     public int getViewDistance() {
         return MdrDefaults.LARGE_SPECIAL_DOOR_VIEW_DISTANCE;
+    }
+
+    @Override
+    public @NotNull AABB getRenderBoundingBox(@NotNull final HbmVehicleDoorBlockEntity be) {
+        final BlockPos pos = be.getBlockPos();
+        return new AABB(
+                pos.getX() - 6.0D, pos.getY(), pos.getZ() - 6.0D,
+                pos.getX() + 6.0D, pos.getY() + 7.0D, pos.getZ() + 6.0D
+        );
     }
 
     @Override
@@ -288,7 +298,7 @@ public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<Hb
             clipped = clipMaxX(clipped, maxX);
             if (clipped.size() < 3) return;
 
-            final ObjVertex first = clipped.get(0);
+            final ObjVertex first = clipped.getFirst();
             for (int i = 1; i < clipped.size() - 1; i++) {
                 final ObjVertex second = clipped.get(i);
                 final ObjVertex third = clipped.get(i + 1);
@@ -311,7 +321,7 @@ public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<Hb
             if (input.isEmpty()) return input;
 
             final List<ObjVertex> output = new ArrayList<>(input.size() + 1);
-            ObjVertex previous = input.get(input.size() - 1);
+            ObjVertex previous = input.getLast();
             boolean previousInside = inside(previous.x, bound, keepGreater);
 
             for (ObjVertex current : input) {
@@ -341,14 +351,12 @@ public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<Hb
                                  final int packedLight,
                                  final int packedOverlay) {
             final Matrix4f poseMatrix = pose.pose();
-            final Matrix3f normalMatrix = pose.normal();
-            vertexConsumer.vertex(poseMatrix, vertex.x, vertex.y, vertex.z)
-                    .color(255, 255, 255, 255)
-                    .uv(vertex.u, vertex.v)
-                    .overlayCoords(packedOverlay)
-                    .uv2(packedLight)
-                    .normal(normalMatrix, vertex.nx, vertex.ny, vertex.nz)
-                    .endVertex();
+            vertexConsumer.addVertex(poseMatrix, vertex.x, vertex.y, vertex.z)
+                    .setColor(255, 255, 255, 255)
+                    .setUv(vertex.u, vertex.v)
+                    .setOverlay(packedOverlay)
+                    .setUv2(packedLight & 0xFFFF, packedLight >> 16)
+                    .setNormal(pose, vertex.nx, vertex.ny, vertex.nz);
         }
     }
 
