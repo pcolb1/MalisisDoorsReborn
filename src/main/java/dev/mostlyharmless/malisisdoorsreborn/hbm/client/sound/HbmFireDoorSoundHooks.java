@@ -62,7 +62,7 @@ public final class HbmFireDoorSoundHooks {
         if (minecraft.level == null) return;
 
         minecraft.getSoundManager().play(new SimpleSoundInstance(
-                MdrSounds.HBM_FIRE_DOOR_STOP.get().getLocation(),
+                MdrSounds.HBM_FIRE_DOOR_STOP.get().location(),
                 SoundSource.BLOCKS,
                 2.0F,
                 1.0F,

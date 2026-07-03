@@ -4,10 +4,8 @@ import dev.mostlyharmless.malisisdoorsreborn.block.CustomDoorBreakTarget;
 import dev.mostlyharmless.malisisdoorsreborn.block.CustomSkinnedDoorTarget;
 import dev.mostlyharmless.malisisdoorsreborn.client.render.door.CustomDoorBreakHelper;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.blockentity.HbmFireDoorBlockEntity;
-import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmFireDoorBlockItem;
-import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmScrewdriverItem;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmScrewdriverMode;
-import dev.mostlyharmless.malisisdoorsreborn.network.MdrNetwork;
+import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmFireDoorBlockItem;
 import dev.mostlyharmless.malisisdoorsreborn.registry.MdrBlockEntities;
 import dev.mostlyharmless.malisisdoorsreborn.registry.MdrItems;
 import net.minecraft.core.BlockPos;
@@ -17,19 +15,18 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.StringRepresentable;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.RenderShape;
-import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -37,11 +34,10 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
-import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.gameevent.GameEvent;
-import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.level.redstone.Orientation;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
@@ -53,16 +49,12 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import net.minecraftforge.client.extensions.common.IClientBlockExtensions;
-
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
 
-@SuppressWarnings("deprecation")
 public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBreakTarget, CustomSkinnedDoorTarget, HbmScrewdriverDoorTarget {
 
-    public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
+    public static final EnumProperty<Direction> FACING = BlockStateProperties.HORIZONTAL_FACING;
     public static final BooleanProperty OPEN = BlockStateProperties.OPEN;
     public static final BooleanProperty POWERED = BlockStateProperties.POWERED;
     public static final IntegerProperty X_PART = IntegerProperty.create("x", 0, 3);
@@ -74,13 +66,10 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
     private static final int ROOT_Y_PART = 0;
     private static final int WIDTH = 4;
     private static final int HEIGHT = 3;
+    private static final int STATE_UPDATE_FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE;
 
-    public HbmFireDoorBlock() {
-        super(Properties.of()
-                .sound(SoundType.METAL)
-                .strength(10.0F, 1000.0F)
-                .requiresCorrectToolForDrops()
-                .noOcclusion());
+    public HbmFireDoorBlock(final Properties properties) {
+        super(properties);
         registerDefaultState(stateDefinition.any()
                 .setValue(FACING, Direction.NORTH)
                 .setValue(OPEN, false)
@@ -90,12 +79,6 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
                 .setValue(PART, HbmFireDoorPart.ROOT)
                 .setValue(SKIN, 0));
     }
-
-    @Override
-    public void initializeClient(@NotNull final Consumer<IClientBlockExtensions> consumer) {
-        CustomDoorBreakHelper.initializeClient(consumer);
-    }
-
 
     @Override
     public boolean isCustomDoorBreakRoot(@NotNull final BlockState rootState,
@@ -175,7 +158,7 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
 
     @Override
     public int customDoorEntitySkin(@NotNull final BlockEntity blockEntity) {
-        return blockEntity instanceof final HbmFireDoorBlockEntity doorEntity ? doorEntity.getSkinIndex() : 0;
+        return blockEntity instanceof final HbmFireDoorBlockEntity door ? door.getSkinIndex() : 0;
     }
 
     @Override
@@ -192,7 +175,7 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
 
     @Override
     public @NotNull RenderShape getRenderShape(@NotNull final BlockState state) {
-        return RenderShape.ENTITYBLOCK_ANIMATED;
+        return RenderShape.INVISIBLE;
     }
 
     @Override
@@ -212,7 +195,7 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
                             @NotNull final BlockState state,
                             @Nullable final LivingEntity placer,
                             @NotNull final ItemStack stack) {
-        if (!level.isClientSide) {
+        if (!level.isClientSide()) {
             final int skinIndex = HbmFireDoorBlockItem.skinIndexFromStack(stack);
             final HbmDoorRedstoneMode redstoneMode = HbmFireDoorBlockItem.redstoneModeFromStack(stack);
             placeDoorParts(level, pos, state.getValue(FACING), state.getValue(OPEN), state.getValue(POWERED), skinIndex);
@@ -224,25 +207,19 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
     }
 
     @Override
-    public @NotNull InteractionResult use(@NotNull final BlockState state,
-                                          @NotNull final Level level,
-                                          @NotNull final BlockPos pos,
-                                          @NotNull final Player player,
-                                          @NotNull final InteractionHand hand,
-                                          @NotNull final BlockHitResult hit) {
-        if (level.isClientSide) return InteractionResult.SUCCESS;
+    public @NotNull InteractionResult useWithoutItem(@NotNull final BlockState state,
+                                                        @NotNull final Level level,
+                                                        @NotNull final BlockPos pos,
+                                                        @NotNull final Player player,
+                                                        @NotNull final BlockHitResult hit) {
+        if (level.isClientSide()) return InteractionResult.SUCCESS;
         final BlockPos rootPos = rootPos(pos, state);
         final BlockState root = level.getBlockState(rootPos);
-        if (!(root.getBlock() instanceof final HbmFireDoorBlock doorBlock)) return InteractionResult.PASS;
-        if (isDoorMoving(level, rootPos, root)) return InteractionResult.CONSUME;
+        if (root.getBlock() != this) return InteractionResult.PASS;
+        if (isDoorMoving(level, rootPos)) return InteractionResult.CONSUME;
 
-        final ItemStack held = player.getItemInHand(hand);
-        if (player.isShiftKeyDown() && held.is(MdrItems.HBM_SCREWDRIVER.get())) {
-            return doorBlock.applyHbmScrewdriverMode(level, pos, state, player, HbmScrewdriverItem.modeFromStack(held));
-        }
-
-        if (!doorBlock.canManualToggle(level, rootPos)) return InteractionResult.CONSUME;
-        doorBlock.setDoorOpen(level, rootPos, !root.getValue(OPEN), player);
+        if (!canManualToggle(level, rootPos)) return InteractionResult.CONSUME;
+        setDoorOpen(level, rootPos, !root.getValue(OPEN), player);
         return InteractionResult.CONSUME;
     }
 
@@ -262,17 +239,17 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
                                                                 @NotNull final BlockPos pos,
                                                                 @NotNull final BlockState state,
                                                                 @NotNull final Player player) {
-        if (level.isClientSide) return InteractionResult.SUCCESS;
+        if (level.isClientSide()) return InteractionResult.SUCCESS;
 
         final BlockPos rootPos = rootPos(pos, state);
         final BlockState root = level.getBlockState(rootPos);
         if (root.getBlock() != this) return InteractionResult.PASS;
-        if (isDoorMoving(level, rootPos, root)) return InteractionResult.CONSUME;
+        if (isDoorMoving(level, rootPos)) return InteractionResult.CONSUME;
 
         if (level.getBlockEntity(rootPos) instanceof final HbmFireDoorBlockEntity door) {
             final int skinIndex = door.cycleSkin();
             updateDoorSkin(level, rootPos, root.getValue(FACING), skinIndex);
-            player.displayClientMessage(Component.literal("Skin: " + HbmFireDoorBlockItem.skinName(skinIndex)), true);
+            player.sendOverlayMessage(Component.literal("Skin: " + HbmFireDoorBlockItem.skinName(skinIndex)));
             playScrewdriverClick(level, rootPos);
             return InteractionResult.CONSUME;
         }
@@ -284,16 +261,16 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
                                                                         @NotNull final BlockPos pos,
                                                                         @NotNull final BlockState state,
                                                                         @NotNull final Player player) {
-        if (level.isClientSide) return InteractionResult.SUCCESS;
+        if (level.isClientSide()) return InteractionResult.SUCCESS;
 
         final BlockPos rootPos = rootPos(pos, state);
         final BlockState root = level.getBlockState(rootPos);
         if (root.getBlock() != this) return InteractionResult.PASS;
-        if (isDoorMoving(level, rootPos, root)) return InteractionResult.CONSUME;
+        if (isDoorMoving(level, rootPos)) return InteractionResult.CONSUME;
 
         if (level.getBlockEntity(rootPos) instanceof final HbmFireDoorBlockEntity door) {
             final HbmDoorRedstoneMode mode = door.cycleRedstoneMode();
-            player.displayClientMessage(Component.literal("Redstone: " + mode.displayName()), true);
+            player.sendOverlayMessage(Component.literal("Redstone: " + mode.displayName()));
             playScrewdriverClick(level, rootPos);
             return InteractionResult.CONSUME;
         }
@@ -311,56 +288,53 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
                                 @NotNull final Level level,
                                 @NotNull final BlockPos pos,
                                 @NotNull final Block neighbourBlock,
-                                @NotNull final BlockPos neighbourPos,
+                                @Nullable final Orientation orientation,
                                 final boolean isMoving) {
-        if (level.isClientSide) return;
+        if (level.isClientSide()) return;
 
         final BlockPos rootPos = rootPos(pos, state);
         final BlockState root = level.getBlockState(rootPos);
         if (!(root.getBlock() instanceof final HbmFireDoorBlock doorBlock)) return;
-        if (isSameDoorPart(level, neighbourPos, rootPos)) return;
-
         final boolean powered = doorBlock.hasDoorSignal(level, rootPos, root.getValue(FACING));
         final boolean wasPowered = root.getValue(POWERED);
         if (powered == wasPowered) return;
 
-        if (!(level.getBlockEntity(rootPos) instanceof final HbmFireDoorBlockEntity door) || door.isMoving(root.getValue(OPEN))) return;
+        if (!(level.getBlockEntity(rootPos) instanceof final HbmFireDoorBlockEntity door) || door.isMoving()) return;
 
         doorBlock.setDoorPowered(level, rootPos, powered);
         doorBlock.applyRedstoneChange(level, rootPos, powered, door.getRedstoneMode());
     }
 
     @Override
-    public void onRemove(@NotNull final BlockState state,
-                         @NotNull final Level level,
-                         @NotNull final BlockPos pos,
-                         @NotNull final BlockState newState,
-                         final boolean isMoving) {
-        if (!level.isClientSide && state.getBlock() != newState.getBlock()) {
-            removeDoorParts(level, rootPos(pos, state), state.getValue(FACING));
-        }
-        super.onRemove(state, level, pos, newState, isMoving);
+    protected void affectNeighborsAfterRemoval(@NotNull final BlockState state,
+                                               @NotNull final ServerLevel level,
+                                               @NotNull final BlockPos pos,
+                                               final boolean movedByPiston) {
+        removeDoorParts(level, rootPos(pos, state), state.getValue(FACING));
+        super.affectNeighborsAfterRemoval(state, level, pos, movedByPiston);
     }
 
     @Override
-    public void playerWillDestroy(@NotNull final Level level,
-                                  @NotNull final BlockPos pos,
-                                  @NotNull final BlockState state,
-                                  @NotNull final Player player) {
-        if (!level.isClientSide && !player.isCreative()) {
+    public @NotNull BlockState playerWillDestroy(@NotNull final Level level,
+                                                 @NotNull final BlockPos pos,
+                                                 @NotNull final BlockState state,
+                                                 @NotNull final Player player) {
+        if (!level.isClientSide() && !player.isCreative()) {
             final BlockPos rootPos = rootPos(pos, state);
             final BlockState root = level.getBlockState(rootPos);
             if (root.getBlock() == this && !pos.equals(rootPos)) {
                 level.destroyBlock(rootPos, true, player);
             }
         }
-        super.playerWillDestroy(level, pos, state, player);
+        return super.playerWillDestroy(level, pos, state, player);
     }
 
     @Override
-    public @NotNull ItemStack getCloneItemStack(@NotNull final BlockGetter level,
+    public @NotNull ItemStack getCloneItemStack(@NotNull final LevelReader level,
                                                 @NotNull final BlockPos pos,
-                                                @NotNull final BlockState state) {
+                                                @NotNull final BlockState state,
+                                                final boolean includeData,
+                                                @NotNull final Player player) {
         final BlockPos rootPos = rootPos(pos, state);
         final HbmDoorRedstoneMode redstoneMode = level.getBlockEntity(rootPos) instanceof final HbmFireDoorBlockEntity door ? door.getRedstoneMode() : HbmDoorRedstoneMode.DEFAULT;
         return HbmFireDoorBlockItem.stackWithSkinAndRedstone(MdrItems.HBM_FIRE_DOOR.get(), skinIndexAt(level, rootPos), redstoneMode);
@@ -371,26 +345,11 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
                                              @NotNull final LootParams.Builder builder) {
         if (state.getValue(PART) != HbmFireDoorPart.ROOT) return List.of();
         final BlockEntity blockEntity = builder.getOptionalParameter(LootContextParams.BLOCK_ENTITY);
-        final int entitySkin = blockEntity instanceof final HbmFireDoorBlockEntity doorEntity ? doorEntity.getSkinIndex() : 0;
+        final int entitySkin = blockEntity instanceof final HbmFireDoorBlockEntity door ? door.getSkinIndex() : 0;
         final int stateSkin = state.hasProperty(SKIN) ? state.getValue(SKIN) : 0;
         final int skinIndex = stateSkin != 0 || entitySkin == 0 ? stateSkin : entitySkin;
-        final HbmDoorRedstoneMode redstoneMode = blockEntity instanceof final HbmFireDoorBlockEntity doorEntity ? doorEntity.getRedstoneMode() : HbmDoorRedstoneMode.DEFAULT;
+        final HbmDoorRedstoneMode redstoneMode = blockEntity instanceof final HbmFireDoorBlockEntity door ? door.getRedstoneMode() : HbmDoorRedstoneMode.DEFAULT;
         return List.of(HbmFireDoorBlockItem.stackWithSkinAndRedstone(MdrItems.HBM_FIRE_DOOR.get(), skinIndex, redstoneMode));
-    }
-
-    @Override
-    public boolean onDestroyedByPlayer(@NotNull final BlockState state,
-                                       @NotNull final Level level,
-                                       @NotNull final BlockPos pos,
-                                       @NotNull final Player player,
-                                       final boolean willHarvest,
-                                       @NotNull final FluidState fluid) {
-        if (player.isCreative()) {
-            final BlockPos rootPos = rootPos(pos, state);
-            if (pos.equals(rootPos)) removeDoorParts(level, rootPos, state.getValue(FACING));
-            return level.setBlock(pos, fluid.createLegacyBlock(), level.isClientSide ? Block.UPDATE_ALL_IMMEDIATE : Block.UPDATE_ALL);
-        }
-        return super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid);
     }
 
     @Override
@@ -448,7 +407,7 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
         final int localY = state.getValue(Y_PART) - ROOT_Y_PART;
 
         if (localX == 1 || localX == -2) return Shapes.block();
-        if (localY == HEIGHT - 1) return Block.box(0.0D, 12.0D, 0.0D, 16.0D, 16.0D, 16.0D);
+        if (localY == HEIGHT - 1) return Block.box(0, 12, 0, 16, 16, 16);
         return Shapes.empty();
     }
 
@@ -465,17 +424,10 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
                 || state.getValue(PART) != HbmFireDoorPart.ROOT) {
             return null;
         }
-        if (level.isClientSide) {
+        if (level.isClientSide()) {
             return (lvl, pos, st, be) -> HbmFireDoorBlockEntity.tickClient(lvl, pos, st, (HbmFireDoorBlockEntity) be);
         }
         return (lvl, pos, st, be) -> HbmFireDoorBlockEntity.tickServer(lvl, pos, st, (HbmFireDoorBlockEntity) be);
-    }
-
-
-    private boolean isSameDoorPart(final Level level, final BlockPos neighbourPos, final BlockPos rootPos) {
-        final BlockState neighbour = level.getBlockState(neighbourPos);
-        if (neighbour.getBlock() != this) return false;
-        return rootPos(neighbourPos, neighbour).equals(rootPos);
     }
 
     private boolean canPlaceDoor(final LevelAccessor level, final BlockPos rootPos, final Direction facing, final BlockPlaceContext context) {
@@ -523,7 +475,7 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
                 final BlockPos partPos = partPos(rootPos, facing, x, y);
                 BlockState state = level.getBlockState(partPos);
                 if (state.getBlock() != this || !state.hasProperty(SKIN)) continue;
-                level.setBlock(partPos, state.setValue(SKIN, normalisedSkin), Block.UPDATE_ALL);
+                level.setBlock(partPos, state.setValue(SKIN, normalisedSkin), STATE_UPDATE_FLAGS);
             }
         }
     }
@@ -556,17 +508,21 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
         updateDoorParts(level, rootPos, level.getBlockState(rootPos).getValue(FACING), powered, null);
     }
 
-
-
     private void setDoorOpen(final Level level, final BlockPos rootPos, final boolean open, @Nullable final Player player) {
         final BlockState root = level.getBlockState(rootPos);
         if (root.getValue(OPEN) == open) return;
-        final Direction facing = root.getValue(FACING);
-        updateDoorParts(level, rootPos, facing, null, open);
-        level.gameEvent(player, open ? GameEvent.BLOCK_OPEN : GameEvent.BLOCK_CLOSE, rootPos);
-        if (level instanceof final ServerLevel serverLevel) {
-            MdrNetwork.sendHbmFireDoorSound(serverLevel, rootPos, true);
+        if (level.getBlockEntity(rootPos) instanceof final HbmFireDoorBlockEntity door) {
+            door.setOpen(open);
+            level.gameEvent(player, open ? GameEvent.BLOCK_OPEN : GameEvent.BLOCK_CLOSE, rootPos);
         }
+    }
+
+
+
+    public void setWholeOpen(final Level level, final BlockPos rootPos, final BlockState rootState, final boolean open) {
+        if (rootState.getValue(OPEN) == open) return;
+        updateDoorParts(level, rootPos, rootState.getValue(FACING), null, open);
+        level.gameEvent(null, open ? GameEvent.BLOCK_OPEN : GameEvent.BLOCK_CLOSE, rootPos);
     }
 
     private void updateDoorParts(final Level level,
@@ -581,16 +537,13 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
                 if (state.getBlock() != this) continue;
                 if (powered != null) state = state.setValue(POWERED, powered);
                 if (open != null) state = state.setValue(OPEN, open);
-                level.setBlock(partPos, state, Block.UPDATE_ALL);
+                level.setBlock(partPos, state, STATE_UPDATE_FLAGS);
             }
         }
     }
 
-    private static boolean isDoorMoving(final Level level, final BlockPos rootPos, final BlockState root) {
-        if (level.getBlockEntity(rootPos) instanceof final HbmFireDoorBlockEntity door) {
-            return door.isMoving(root.getValue(OPEN));
-        }
-        return false;
+    private static boolean isDoorMoving(final Level level, final BlockPos rootPos) {
+        return level.getBlockEntity(rootPos) instanceof final HbmFireDoorBlockEntity door && door.isMoving();
     }
 
     private boolean hasDoorSignal(final Level level, final BlockPos rootPos, final Direction facing) {

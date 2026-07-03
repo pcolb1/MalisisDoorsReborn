@@ -3,20 +3,27 @@ package dev.mostlyharmless.malisisdoorsreborn.hbm.client.render;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
-import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmVehicleDoorBlock;
-import dev.mostlyharmless.malisisdoorsreborn.hbm.blockentity.HbmVehicleDoorBlockEntity;
 import dev.mostlyharmless.malisisdoorsreborn.client.render.door.CustomDoorBreakingOverlay;
 import dev.mostlyharmless.malisisdoorsreborn.core.MdrDefaults;
+import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmVehicleDoorBlock;
+import dev.mostlyharmless.malisisdoorsreborn.hbm.blockentity.HbmVehicleDoorBlockEntity;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
+import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
+import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
-import org.joml.Matrix3f;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 
 import java.io.BufferedReader;
@@ -28,9 +35,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<HbmVehicleDoorBlockEntity> {
+public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<HbmVehicleDoorBlockEntity, HbmVehicleDoorBlockEntityRenderer.VehicleDoorRenderState> {
 
-    private static final ResourceLocation TEXTURE = ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vehicle_door.png");
+    private static final Identifier[] TEXTURES = {
+            Identifier.fromNamespaceAndPath(MdrDefaults.MOD_ID, "block/hbm_vehicle_door_skin_default")
+    };
+    private static final Identifier BLOCK_ATLAS_ID = Identifier.withDefaultNamespace("blocks");
     private static final ObjModel MODEL = ObjModel.load("assets/malisisdoorsreborn/models/pheodoors/vehicle_door.obj");
     private static final float MAX_OPEN = 3.0F;
     private static final float CLIP_MIN_X = -3.4375F;
@@ -45,26 +55,50 @@ public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<Hb
     }
 
     @Override
-    public void render(@NotNull final HbmVehicleDoorBlockEntity be,
-                       final float partialTick,
-                       @NotNull final PoseStack poseStack,
-                       @NotNull final MultiBufferSource buffer,
-                       final int packedLight,
-                       final int packedOverlay) {
+    public @NotNull AABB getRenderBoundingBox(@NotNull final HbmVehicleDoorBlockEntity be) {
+        final BlockPos pos = be.getBlockPos();
+        return new AABB(
+                pos.getX() - 6.0D, pos.getY(), pos.getZ() - 6.0D,
+                pos.getX() + 6.0D, pos.getY() + 7.0D, pos.getZ() + 6.0D
+        );
+    }
+
+    @Override
+    public @NotNull VehicleDoorRenderState createRenderState() {
+        return new VehicleDoorRenderState();
+    }
+
+    @Override
+    public void extractRenderState(@NotNull final HbmVehicleDoorBlockEntity be,
+                                   @NotNull final VehicleDoorRenderState renderState,
+                                   final float partialTick,
+                                   @NotNull final Vec3 cameraPos,
+                                   @Nullable final ModelFeatureRenderer.CrumblingOverlay crumblingOverlay) {
+        BlockEntityRenderer.super.extractRenderState(be, renderState, partialTick, cameraPos,
+                CustomDoorBreakingOverlay.shouldRenderNormalDuringVanillaBreakingPass(crumblingOverlay, be.getBlockPos())
+                        ? null
+                        : crumblingOverlay);
+        renderState.clear();
+
         final BlockState state = be.getBlockState();
         if (!(state.getBlock() instanceof HbmVehicleDoorBlock)) return;
         if (state.getValue(HbmVehicleDoorBlock.PART) != HbmVehicleDoorBlock.HbmVehicleDoorPart.ROOT) return;
 
-        final Direction facing = state.getValue(HbmVehicleDoorBlock.FACING);
-        final float open = Math.max(0.0F, Math.min(MAX_OPEN, be.getProgress(partialTick) * MAX_OPEN));
-        final Minecraft minecraft = Minecraft.getInstance();
-        if (CustomDoorBreakingOverlay.shouldRenderNormalDuringVanillaBreakingPass(minecraft, buffer, be.getBlockPos())) {
-            renderModel(poseStack, minecraft.renderBuffers().bufferSource(), packedLight, packedOverlay, facing, open, skinIndexForRender(state, be));
-            return;
-        }
-        renderModel(poseStack, buffer, packedLight, packedOverlay, facing, open, skinIndexForRender(state, be));
+        renderState.state = state;
+        renderState.facing = state.getValue(HbmVehicleDoorBlock.FACING);
+        renderState.open = Math.max(0.0F, Math.min(MAX_OPEN, be.getProgress(partialTick) * MAX_OPEN));
+        renderState.skinIndex = skinIndexForRender(state, be);
+        renderState.packedLight = renderState.lightCoords;
     }
 
+    @Override
+    public void submit(@NotNull final VehicleDoorRenderState renderState,
+                       @NotNull final PoseStack poseStack,
+                       @NotNull final SubmitNodeCollector collector,
+                       @NotNull final CameraRenderState cameraState) {
+        if (renderState.state == null || renderState.facing == null) return;
+        submitModel(poseStack, collector, renderState.packedLight, 0, renderState.facing, renderState.open, renderState.skinIndex);
+    }
 
     private static int skinIndexForRender(@NotNull final BlockState state, @NotNull final HbmVehicleDoorBlockEntity be) {
         final int entitySkin = be.getSkinIndex();
@@ -73,8 +107,8 @@ public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<Hb
         return stateSkin != 0 || entitySkin == 0 ? stateSkin : entitySkin;
     }
 
-    public static void renderItem(@NotNull final PoseStack poseStack,
-                                  @NotNull final MultiBufferSource buffer,
+    public static void submitItem(@NotNull final PoseStack poseStack,
+                                  @NotNull final SubmitNodeCollector collector,
                                   final int packedLight,
                                   final int packedOverlay,
                                   final int skinIndex) {
@@ -82,38 +116,43 @@ public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<Hb
         poseStack.translate(0.5F, 0.0F, 0.5F);
         poseStack.scale(0.31F, 0.31F, 0.31F);
         poseStack.translate(-1.5F, 0.0F, -0.5F);
-        renderModel(poseStack, buffer, packedLight, packedOverlay, Direction.SOUTH, 0.0F, skinIndex);
+        submitModel(poseStack, collector, packedLight, packedOverlay, Direction.SOUTH, 0.0F, skinIndex);
         poseStack.popPose();
     }
 
-    @SuppressWarnings("unused")
-    private static void renderModel(@NotNull final PoseStack poseStack,
-                                    @NotNull final MultiBufferSource buffer,
+    @SuppressWarnings("resource")
+    private static void submitModel(@NotNull final PoseStack poseStack,
+                                    @NotNull final SubmitNodeCollector collector,
                                     final int packedLight,
                                     final int packedOverlay,
                                     @NotNull final Direction facing,
                                     final float open,
                                     final int skinIndex) {
-        final VertexConsumer vertexConsumer = buffer.getBuffer(RenderType.entityCutoutNoCull(TEXTURE));
+        final TextureAtlasSprite sprite = spriteFor(skinIndex);
 
         poseStack.pushPose();
         poseStack.translate(0.5F, 0.0F, 0.5F);
         poseStack.mulPose(Axis.YP.rotationDegrees(yawFor(facing)));
-
-        // Literal RenderVehicleDoor contract after RenderDoorGeneric has translated and rotated the root.
         poseStack.mulPose(Axis.YP.rotationDegrees(90.0F));
 
-        MODEL.frame.render(poseStack.last(), vertexConsumer, packedLight, packedOverlay);
-
-        MODEL.left.renderClipped(poseStack.last(), vertexConsumer, packedLight, packedOverlay, -open, CLIP_MIN_X, CLIP_MAX_X);
-        MODEL.right.renderClipped(poseStack.last(), vertexConsumer, packedLight, packedOverlay, open, CLIP_MIN_X, CLIP_MAX_X);
+        collector.submitCustomGeometry(poseStack, RenderTypes.cutoutMovingBlock(), (pose, vertexConsumer) ->
+                MODEL.frame.render(pose, vertexConsumer, sprite, packedLight, packedOverlay));
+        collector.submitCustomGeometry(poseStack, RenderTypes.cutoutMovingBlock(), (pose, vertexConsumer) ->
+                MODEL.left.renderClipped(pose, vertexConsumer, sprite, packedLight, packedOverlay, -open, CLIP_MIN_X, CLIP_MAX_X));
+        collector.submitCustomGeometry(poseStack, RenderTypes.cutoutMovingBlock(), (pose, vertexConsumer) ->
+                MODEL.right.renderClipped(pose, vertexConsumer, sprite, packedLight, packedOverlay, open, CLIP_MIN_X, CLIP_MAX_X));
 
         poseStack.popPose();
     }
 
+    private static TextureAtlasSprite spriteFor(final int skinIndex) {
+        return Minecraft.getInstance()
+                .getAtlasManager()
+                .getAtlasOrThrow(BLOCK_ATLAS_ID)
+                .getSprite(TEXTURES[Math.floorMod(skinIndex, TEXTURES.length)]);
+    }
+
     private static float yawFor(final Direction facing) {
-        // HBM RenderDoorGeneric rotation before RenderVehicleDoor's own fixed +90° rotation:
-        // meta SOUTH -> 270°, EAST -> 0°, NORTH -> 90°, WEST -> 180°.
         return switch (facing) {
             case EAST -> 0.0F;
             case NORTH -> 90.0F;
@@ -143,23 +182,11 @@ public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<Hb
                         final String[] parts = line.split("\\s+");
                         switch (parts[0]) {
                             case "o", "g" -> current = groupFor(parts.length > 1 ? parts[1] : "", frame, left, right);
-                            case "v" -> positions.add(new float[] {
-                                    Float.parseFloat(parts[1]),
-                                    Float.parseFloat(parts[2]),
-                                    Float.parseFloat(parts[3])
-                            });
-                            case "vt" -> uvs.add(new float[] {
-                                    Float.parseFloat(parts[1]),
-                                    1.0F - Float.parseFloat(parts[2])
-                            });
-                            case "vn" -> normals.add(new float[] {
-                                    Float.parseFloat(parts[1]),
-                                    Float.parseFloat(parts[2]),
-                                    Float.parseFloat(parts[3])
-                            });
+                            case "v" -> positions.add(new float[] {Float.parseFloat(parts[1]), Float.parseFloat(parts[2]), Float.parseFloat(parts[3])});
+                            case "vt" -> uvs.add(new float[] {Float.parseFloat(parts[1]), 1.0F - Float.parseFloat(parts[2])});
+                            case "vn" -> normals.add(new float[] {Float.parseFloat(parts[1]), Float.parseFloat(parts[2]), Float.parseFloat(parts[3])});
                             case "f" -> addFace(parts, positions, uvs, normals, current);
-                            default -> {
-                            }
+                            default -> {}
                         }
                     }
                 }
@@ -189,16 +216,12 @@ public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<Hb
                                     final List<ObjFace> current) {
             if (current == null || parts.length < 4) return;
             final ObjVertex[] vertices = new ObjVertex[parts.length - 1];
-            for (int i = 1; i < parts.length; i++) {
-                vertices[i - 1] = vertex(parts[i], positions, uvs, normals);
-            }
+            for (int i = 1; i < parts.length; i++) vertices[i - 1] = vertex(parts[i], positions, uvs, normals);
             if (vertices.length <= 4) {
                 current.add(new ObjFace(vertices));
                 return;
             }
-            for (int i = 1; i < vertices.length - 1; i++) {
-                current.add(new ObjFace(new ObjVertex[] {vertices[0], vertices[i], vertices[i + 1]}));
-            }
+            for (int i = 1; i < vertices.length - 1; i++) current.add(new ObjFace(new ObjVertex[] {vertices[0], vertices[i], vertices[i + 1]}));
         }
 
         private static ObjVertex vertex(final String token,
@@ -209,14 +232,14 @@ public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<Hb
             final float[] position = positions.get(parseObjIndex(indices[0], positions.size()));
             float u = 0.0F;
             float v = 0.0F;
+            float nx = 0.0F;
+            float ny = 1.0F;
+            float nz = 0.0F;
             if (indices.length > 1 && !indices[1].isEmpty()) {
                 final float[] uv = uvs.get(parseObjIndex(indices[1], uvs.size()));
                 u = uv[0];
                 v = uv[1];
             }
-            float nx = 0.0F;
-            float ny = 1.0F;
-            float nz = 0.0F;
             if (indices.length > 2 && !indices[2].isEmpty()) {
                 final float[] normal = normals.get(parseObjIndex(indices[2], normals.size()));
                 nx = normal[0];
@@ -237,46 +260,50 @@ public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<Hb
             return new ObjGroup(List.of());
         }
 
-        private ObjGroup(final List<ObjFace> faces) {
-            this.faces = List.copyOf(faces);
+        private ObjGroup {
+            faces = List.copyOf(faces);
         }
 
         private void render(final PoseStack.Pose pose,
                             final VertexConsumer vertexConsumer,
+                            @Nullable final TextureAtlasSprite sprite,
                             final int packedLight,
                             final int packedOverlay) {
-            for (ObjFace face : faces) face.render(pose, vertexConsumer, packedLight, packedOverlay);
+            for (ObjFace face : faces) face.render(pose, vertexConsumer, sprite, packedLight, packedOverlay);
         }
 
         @SuppressWarnings("SameParameterValue")
         private void renderClipped(final PoseStack.Pose pose,
                                    final VertexConsumer vertexConsumer,
+                                   @Nullable final TextureAtlasSprite sprite,
                                    final int packedLight,
                                    final int packedOverlay,
                                    final float offsetX,
                                    final float minX,
                                    final float maxX) {
-            for (ObjFace face : faces) face.renderClipped(pose, vertexConsumer, packedLight, packedOverlay, offsetX, minX, maxX);
+            for (ObjFace face : faces) face.renderClipped(pose, vertexConsumer, sprite, packedLight, packedOverlay, offsetX, minX, maxX);
         }
     }
 
     private record ObjFace(ObjVertex[] vertices) {
         private void render(final PoseStack.Pose pose,
                             final VertexConsumer vertexConsumer,
+                            @Nullable final TextureAtlasSprite sprite,
                             final int packedLight,
                             final int packedOverlay) {
             if (vertices.length == 3) {
-                emit(vertices[0], pose, vertexConsumer, packedLight, packedOverlay);
-                emit(vertices[1], pose, vertexConsumer, packedLight, packedOverlay);
-                emit(vertices[2], pose, vertexConsumer, packedLight, packedOverlay);
-                emit(vertices[2], pose, vertexConsumer, packedLight, packedOverlay);
+                emit(vertices[0], pose, vertexConsumer, sprite, packedLight, packedOverlay);
+                emit(vertices[1], pose, vertexConsumer, sprite, packedLight, packedOverlay);
+                emit(vertices[2], pose, vertexConsumer, sprite, packedLight, packedOverlay);
+                emit(vertices[2], pose, vertexConsumer, sprite, packedLight, packedOverlay);
                 return;
             }
-            for (ObjVertex vertex : vertices) emit(vertex, pose, vertexConsumer, packedLight, packedOverlay);
+            for (ObjVertex vertex : vertices) emit(vertex, pose, vertexConsumer, sprite, packedLight, packedOverlay);
         }
 
         private void renderClipped(final PoseStack.Pose pose,
                                    final VertexConsumer vertexConsumer,
+                                   @Nullable final TextureAtlasSprite sprite,
                                    final int packedLight,
                                    final int packedOverlay,
                                    final float offsetX,
@@ -287,74 +314,96 @@ public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<Hb
             clipped = clipMinX(clipped, minX);
             clipped = clipMaxX(clipped, maxX);
             if (clipped.size() < 3) return;
-
-            final ObjVertex first = clipped.get(0);
+            final ObjVertex first = clipped.getFirst();
             for (int i = 1; i < clipped.size() - 1; i++) {
                 final ObjVertex second = clipped.get(i);
                 final ObjVertex third = clipped.get(i + 1);
-                emit(first, pose, vertexConsumer, packedLight, packedOverlay);
-                emit(second, pose, vertexConsumer, packedLight, packedOverlay);
-                emit(third, pose, vertexConsumer, packedLight, packedOverlay);
-                emit(third, pose, vertexConsumer, packedLight, packedOverlay);
+                emit(first, pose, vertexConsumer, sprite, packedLight, packedOverlay);
+                emit(second, pose, vertexConsumer, sprite, packedLight, packedOverlay);
+                emit(third, pose, vertexConsumer, sprite, packedLight, packedOverlay);
+                emit(third, pose, vertexConsumer, sprite, packedLight, packedOverlay);
             }
         }
 
         private static List<ObjVertex> clipMinX(final List<ObjVertex> input, final float minX) {
-            return clipX(input, minX, true);
-        }
-
-        private static List<ObjVertex> clipMaxX(final List<ObjVertex> input, final float maxX) {
-            return clipX(input, maxX, false);
-        }
-
-        private static List<ObjVertex> clipX(final List<ObjVertex> input, final float bound, final boolean keepGreater) {
-            if (input.isEmpty()) return input;
-
-            final List<ObjVertex> output = new ArrayList<>(input.size() + 1);
-            ObjVertex previous = input.get(input.size() - 1);
-            boolean previousInside = inside(previous.x, bound, keepGreater);
-
-            for (ObjVertex current : input) {
-                final boolean currentInside = inside(current.x, bound, keepGreater);
-                if (currentInside != previousInside) output.add(intersectX(previous, current, bound));
+            final List<ObjVertex> output = new ArrayList<>();
+            for (int i = 0; i < input.size(); i++) {
+                final ObjVertex current = input.get(i);
+                final ObjVertex previous = input.get((i + input.size() - 1) % input.size());
+                final boolean currentInside = current.x >= minX;
+                final boolean previousInside = previous.x >= minX;
+                if (currentInside != previousInside) output.add(intersectX(previous, current, minX));
                 if (currentInside) output.add(current);
-                previous = current;
-                previousInside = currentInside;
             }
-
             return output;
         }
 
-        private static boolean inside(final float x, final float bound, final boolean keepGreater) {
-            return keepGreater ? x >= bound : x <= bound;
+        private static List<ObjVertex> clipMaxX(final List<ObjVertex> input, final float maxX) {
+            final List<ObjVertex> output = new ArrayList<>();
+            for (int i = 0; i < input.size(); i++) {
+                final ObjVertex current = input.get(i);
+                final ObjVertex previous = input.get((i + input.size() - 1) % input.size());
+                final boolean currentInside = current.x <= maxX;
+                final boolean previousInside = previous.x <= maxX;
+                if (currentInside != previousInside) output.add(intersectX(previous, current, maxX));
+                if (currentInside) output.add(current);
+            }
+            return output;
         }
 
-        private static ObjVertex intersectX(final ObjVertex start, final ObjVertex end, final float bound) {
-            final float denominator = end.x - start.x;
-            final float t = denominator == 0.0F ? 0.0F : (bound - start.x) / denominator;
-            return start.lerp(end, Math.max(0.0F, Math.min(1.0F, t)));
+        private static ObjVertex intersectX(final ObjVertex a, final ObjVertex b, final float x) {
+            final float denominator = b.x - a.x;
+            final float t = denominator == 0.0F ? 0.0F : (x - a.x) / denominator;
+            return a.lerp(b, t).withX(x);
         }
 
         private static void emit(final ObjVertex vertex,
                                  final PoseStack.Pose pose,
                                  final VertexConsumer vertexConsumer,
+                                 @Nullable final TextureAtlasSprite sprite,
                                  final int packedLight,
                                  final int packedOverlay) {
             final Matrix4f poseMatrix = pose.pose();
-            final Matrix3f normalMatrix = pose.normal();
-            vertexConsumer.vertex(poseMatrix, vertex.x, vertex.y, vertex.z)
-                    .color(255, 255, 255, 255)
-                    .uv(vertex.u, vertex.v)
-                    .overlayCoords(packedOverlay)
-                    .uv2(packedLight)
-                    .normal(normalMatrix, vertex.nx, vertex.ny, vertex.nz)
-                    .endVertex();
+            vertexConsumer.addVertex(poseMatrix, vertex.x, vertex.y, vertex.z)
+                    .setColor(255, 255, 255, 255)
+                    .setUv(mappedU(sprite, vertex.u), mappedV(sprite, vertex.v))
+                    .setOverlay(packedOverlay)
+                    .setUv2(packedLight & 0xFFFF, packedLight >> 16)
+                    .setNormal(pose, vertex.nx, vertex.ny, vertex.nz);
+        }
+    }
+
+    private static float mappedU(@Nullable final TextureAtlasSprite sprite, final float u) {
+        return sprite == null ? u : sprite.getU0() + ((sprite.getU1() - sprite.getU0()) * u);
+    }
+
+    private static float mappedV(@Nullable final TextureAtlasSprite sprite, final float v) {
+        return sprite == null ? v : sprite.getV0() + ((sprite.getV1() - sprite.getV0()) * v);
+    }
+
+    public static final class VehicleDoorRenderState extends BlockEntityRenderState {
+        private BlockState state;
+        private Direction facing;
+        private float open;
+        private int skinIndex;
+        private int packedLight;
+
+        private void clear() {
+            state = null;
+            facing = null;
+            open = 0.0F;
+            skinIndex = 0;
+            packedLight = 0;
         }
     }
 
     private record ObjVertex(float x, float y, float z, float u, float v, float nx, float ny, float nz) {
         private ObjVertex offsetX(final float offset) {
             return new ObjVertex(x + offset, y, z, u, v, nx, ny, nz);
+        }
+
+        private ObjVertex withX(final float newX) {
+            return new ObjVertex(newX, y, z, u, v, nx, ny, nz);
         }
 
         private ObjVertex lerp(final ObjVertex other, final float t) {
