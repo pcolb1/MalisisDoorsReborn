@@ -1,25 +1,23 @@
 package dev.mostlyharmless.malisisdoorsreborn.hbm.item;
 
 import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmDoorRedstoneMode;
-
-import dev.mostlyharmless.malisisdoorsreborn.hbm.client.render.item.HbmFireDoorItemRenderer;
 import dev.mostlyharmless.malisisdoorsreborn.item.TooltipBlockItem;
 import net.minecraft.ChatFormatting;
-import net.minecraft.Util;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.TooltipFlag;
-import net.minecraft.world.level.Level;
+import net.minecraft.world.item.component.TooltipDisplay;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
-import net.minecraftforge.client.extensions.common.IClientItemExtensions;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -45,9 +43,10 @@ public class HbmFireDoorBlockItem extends TooltipBlockItem {
     }
 
     public static int skinIndexFromStack(@NotNull final ItemStack stack) {
-        final CompoundTag tag = stack.getTag();
+        final CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        final CompoundTag tag = data == null ? null : data.copyTag();
         if (tag == null || !tag.contains(SKIN_TAG)) return 0;
-        return Math.floorMod(tag.getInt(SKIN_TAG), SKIN_COUNT);
+        return Math.floorMod(tag.getIntOr(SKIN_TAG, 0), SKIN_COUNT);
     }
 
     public static ItemStack stackWithSkinAndRedstone(@NotNull final Item item,
@@ -62,40 +61,78 @@ public class HbmFireDoorBlockItem extends TooltipBlockItem {
 
     public static ItemStack stackWithSkinPreviewCycle(@NotNull final Item item) {
         final ItemStack stack = new ItemStack(item);
-        if (SKIN_COUNT > 1) stack.getOrCreateTag().putBoolean(SKIN_PREVIEW_CYCLE_TAG, true);
+        if (SKIN_COUNT > 1) setSkinPreviewCycle(stack, true);
         return stack;
     }
 
     public static int skinIndexForRender(@NotNull final ItemStack stack) {
         if (hasSkinPreviewCycle(stack) && SKIN_COUNT > 1) {
-            return (int) ((Util.getMillis() / 1000L) % SKIN_COUNT);
+            return (int) ((System.currentTimeMillis() / 1000L) % SKIN_COUNT);
         }
         return skinIndexFromStack(stack);
     }
 
     private static boolean hasSkinPreviewCycle(@NotNull final ItemStack stack) {
-        final CompoundTag tag = stack.getTag();
-        return tag != null && tag.getBoolean(SKIN_PREVIEW_CYCLE_TAG);
+        final CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        final CompoundTag tag = data == null ? null : data.copyTag();
+        return tag != null && tag.getBooleanOr(SKIN_PREVIEW_CYCLE_TAG, false);
+    }
+
+    @SuppressWarnings("SameParameterValue")
+    private static void setSkinPreviewCycle(@NotNull final ItemStack stack, final boolean enabled) {
+        final CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        final CompoundTag tag = data == null ? new CompoundTag() : data.copyTag();
+        if (enabled) {
+            tag.putBoolean(SKIN_PREVIEW_CYCLE_TAG, true);
+            stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+            return;
+        }
+        tag.remove(SKIN_PREVIEW_CYCLE_TAG);
+        if (tag.isEmpty()) {
+            stack.remove(DataComponents.CUSTOM_DATA);
+        } else {
+            stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+        }
     }
 
     private static void clearSkinPreviewCycle(@NotNull final ItemStack stack) {
-        final CompoundTag tag = stack.getTag();
-        if (tag == null || !tag.contains(SKIN_PREVIEW_CYCLE_TAG)) return;
+        final CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        if (data == null) return;
+        final CompoundTag tag = data.copyTag();
+        if (!tag.contains(SKIN_PREVIEW_CYCLE_TAG)) return;
         tag.remove(SKIN_PREVIEW_CYCLE_TAG);
-        if (tag.isEmpty()) stack.setTag(null);
+        if (tag.isEmpty()) {
+            stack.remove(DataComponents.CUSTOM_DATA);
+        } else {
+            stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+        }
     }
 
     public static void setSkinIndex(@NotNull final ItemStack stack, final int skinIndex) {
         final int normalisedSkin = Math.floorMod(skinIndex, SKIN_COUNT);
+        final CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        final CompoundTag tag = data == null ? new CompoundTag() : data.copyTag();
         if (normalisedSkin == 0) {
-            final CompoundTag tag = stack.getTag();
-            if (tag != null) {
-                tag.remove(SKIN_TAG);
-                if (tag.isEmpty()) stack.setTag(null);
+            tag.remove(SKIN_TAG);
+            if (tag.isEmpty()) {
+                stack.remove(DataComponents.CUSTOM_DATA);
+            } else {
+                stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
             }
             return;
         }
-        stack.getOrCreateTag().putInt(SKIN_TAG, normalisedSkin);
+        tag.putInt(SKIN_TAG, normalisedSkin);
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+    }
+
+    public static String skinKey(final int skinIndex) {
+        return switch (Math.floorMod(skinIndex, SKIN_COUNT)) {
+            case 1 -> "black";
+            case 2 -> "orange";
+            case 3 -> "yellow";
+            case 4 -> "trefoil";
+            default -> "default";
+        };
     }
 
     public static String skinName(final int skinIndex) {
@@ -103,22 +140,27 @@ public class HbmFireDoorBlockItem extends TooltipBlockItem {
     }
 
     public static HbmDoorRedstoneMode redstoneModeFromStack(@NotNull final ItemStack stack) {
-        final CompoundTag tag = stack.getTag();
+        final CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        final CompoundTag tag = data == null ? null : data.copyTag();
         if (tag == null || !tag.contains(REDSTONE_MODE_TAG)) return HbmDoorRedstoneMode.DEFAULT;
-        return HbmDoorRedstoneMode.fromOrdinal(tag.getInt(REDSTONE_MODE_TAG));
+        return HbmDoorRedstoneMode.fromOrdinal(tag.getIntOr(REDSTONE_MODE_TAG, 0));
     }
 
     public static void setRedstoneMode(@NotNull final ItemStack stack,
                                        @NotNull final HbmDoorRedstoneMode redstoneMode) {
+        final CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        final CompoundTag tag = data == null ? new CompoundTag() : data.copyTag();
         if (redstoneMode == HbmDoorRedstoneMode.DEFAULT) {
-            final CompoundTag tag = stack.getTag();
-            if (tag != null) {
-                tag.remove(REDSTONE_MODE_TAG);
-                if (tag.isEmpty()) stack.setTag(null);
+            tag.remove(REDSTONE_MODE_TAG);
+            if (tag.isEmpty()) {
+                stack.remove(DataComponents.CUSTOM_DATA);
+            } else {
+                stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
             }
             return;
         }
-        stack.getOrCreateTag().putInt(REDSTONE_MODE_TAG, redstoneMode.ordinal());
+        tag.putInt(REDSTONE_MODE_TAG, redstoneMode.ordinal());
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
     }
 
     public static String redstoneModeName(@NotNull final HbmDoorRedstoneMode redstoneMode) {
@@ -128,40 +170,24 @@ public class HbmFireDoorBlockItem extends TooltipBlockItem {
 
     @Override
     public void inventoryTick(@NotNull final ItemStack stack,
-                              @NotNull final Level level,
+                              @NotNull final ServerLevel level,
                               @NotNull final Entity entity,
-                              final int slotId,
-                              final boolean isSelected) {
+                              @Nullable final EquipmentSlot slot) {
         clearSkinPreviewCycle(stack);
-        super.inventoryTick(stack, level, entity, slotId, isSelected);
+        super.inventoryTick(stack, level, entity, slot);
     }
 
     @Override
     public void appendHoverText(@NotNull final ItemStack stack,
-                                final Level level,
-                                @NotNull final List<Component> tooltip,
+                                @NotNull final Item.TooltipContext context,
+                                @NotNull final TooltipDisplay tooltipDisplay,
+                                @NotNull final Consumer<Component> consumer,
                                 @NotNull final TooltipFlag flag) {
-        super.appendHoverText(stack, level, tooltip, flag);
-        tooltip.add(Component.literal("Skin: " + skinName(skinIndexFromStack(stack))).withStyle(ChatFormatting.WHITE));
-        tooltip.add(Component.literal("Redstone: " + redstoneModeName(redstoneModeFromStack(stack))).withStyle(ChatFormatting.WHITE));
-    }
-
-    @Override
-    public void initializeClient(@NotNull final Consumer<IClientItemExtensions> consumer) {
-        consumer.accept(new IClientItemExtensions() {
-            private HbmFireDoorItemRenderer renderer;
-
-            @Override
-            public @NotNull BlockEntityWithoutLevelRenderer getCustomRenderer() {
-                if (renderer == null) {
-                    final Minecraft minecraft = Minecraft.getInstance();
-                    renderer = new HbmFireDoorItemRenderer(
-                            minecraft.getBlockEntityRenderDispatcher(),
-                            minecraft.getEntityModels()
-                    );
-                }
-                return renderer;
-            }
-        });
+        super.appendHoverText(stack, context, tooltipDisplay, consumer, flag);
+        consumer.accept(Component.translatable(
+                "tooltip.malisisdoorsreborn.hbm_fire_door.skin",
+                Component.translatable("tooltip.malisisdoorsreborn.hbm_fire_door.skin." + skinKey(skinIndexFromStack(stack)))
+        ).withStyle(ChatFormatting.WHITE));
+        consumer.accept(Component.literal("Redstone: " + redstoneModeName(redstoneModeFromStack(stack))).withStyle(ChatFormatting.WHITE));
     }
 }

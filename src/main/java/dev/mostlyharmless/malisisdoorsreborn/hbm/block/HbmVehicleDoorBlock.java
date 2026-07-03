@@ -2,12 +2,9 @@ package dev.mostlyharmless.malisisdoorsreborn.hbm.block;
 
 import dev.mostlyharmless.malisisdoorsreborn.block.CustomDoorBreakTarget;
 import dev.mostlyharmless.malisisdoorsreborn.block.CustomSkinnedDoorTarget;
-import dev.mostlyharmless.malisisdoorsreborn.client.render.door.CustomDoorBreakHelper;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.blockentity.HbmVehicleDoorBlockEntity;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmVehicleDoorBlockItem;
-import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmScrewdriverItem;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmScrewdriverMode;
-import dev.mostlyharmless.malisisdoorsreborn.network.MdrNetwork;
 import dev.mostlyharmless.malisisdoorsreborn.registry.MdrBlockEntities;
 import dev.mostlyharmless.malisisdoorsreborn.registry.MdrItems;
 import dev.mostlyharmless.malisisdoorsreborn.registry.MdrBlocks;
@@ -18,7 +15,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.StringRepresentable;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -26,11 +22,11 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.RenderShape;
-import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -38,12 +34,11 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
-import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.gameevent.GameEvent;
-import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.level.redstone.Orientation;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.AABB;
@@ -54,16 +49,12 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import net.minecraftforge.client.extensions.common.IClientBlockExtensions;
-
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
 
-@SuppressWarnings("deprecation")
 public class HbmVehicleDoorBlock extends Block implements EntityBlock, CustomDoorBreakTarget, CustomSkinnedDoorTarget, HbmScrewdriverDoorTarget {
 
-    public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
+    public static final EnumProperty<Direction> FACING = BlockStateProperties.HORIZONTAL_FACING;
     public static final BooleanProperty OPEN = BlockStateProperties.OPEN;
     public static final BooleanProperty POWERED = BlockStateProperties.POWERED;
     public static final IntegerProperty X_PART = IntegerProperty.create("x", 0, 6);
@@ -75,13 +66,10 @@ public class HbmVehicleDoorBlock extends Block implements EntityBlock, CustomDoo
     private static final int ROOT_Y_PART = 0;
     private static final int WIDTH = 7;
     private static final int HEIGHT = 6;
+    private static final int STATE_UPDATE_FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE;
 
-    public HbmVehicleDoorBlock() {
-        super(Properties.of()
-                .sound(SoundType.METAL)
-                .strength(10.0F, 1000.0F)
-                .requiresCorrectToolForDrops()
-                .noOcclusion());
+    public HbmVehicleDoorBlock(final Properties properties) {
+        super(properties);
         registerDefaultState(stateDefinition.any()
                 .setValue(FACING, Direction.NORTH)
                 .setValue(OPEN, false)
@@ -90,11 +78,6 @@ public class HbmVehicleDoorBlock extends Block implements EntityBlock, CustomDoo
                 .setValue(Y_PART, ROOT_Y_PART)
                 .setValue(PART, HbmVehicleDoorPart.ROOT)
                 .setValue(SKIN, 0));
-    }
-
-    @Override
-    public void initializeClient(@NotNull final Consumer<IClientBlockExtensions> consumer) {
-        CustomDoorBreakHelper.initializeClient(consumer);
     }
 
 
@@ -192,7 +175,7 @@ public class HbmVehicleDoorBlock extends Block implements EntityBlock, CustomDoo
 
     @Override
     public @NotNull RenderShape getRenderShape(@NotNull final BlockState state) {
-        return RenderShape.ENTITYBLOCK_ANIMATED;
+        return RenderShape.INVISIBLE;
     }
 
     @Override
@@ -212,7 +195,7 @@ public class HbmVehicleDoorBlock extends Block implements EntityBlock, CustomDoo
                             @NotNull final BlockState state,
                             @Nullable final LivingEntity placer,
                             @NotNull final ItemStack stack) {
-        if (!level.isClientSide) {
+        if (!level.isClientSide()) {
             final int skinIndex = HbmVehicleDoorBlockItem.skinIndexFromStack(stack);
             final HbmDoorRedstoneMode redstoneMode = HbmVehicleDoorBlockItem.redstoneModeFromStack(stack);
             placeDoorParts(level, pos, state.getValue(FACING), state.getValue(OPEN), state.getValue(POWERED), skinIndex);
@@ -224,22 +207,16 @@ public class HbmVehicleDoorBlock extends Block implements EntityBlock, CustomDoo
     }
 
     @Override
-    public @NotNull InteractionResult use(@NotNull final BlockState state,
-                                          @NotNull final Level level,
-                                          @NotNull final BlockPos pos,
-                                          @NotNull final Player player,
-                                          @NotNull final InteractionHand hand,
-                                          @NotNull final BlockHitResult hit) {
-        if (level.isClientSide) return InteractionResult.SUCCESS;
+    public @NotNull InteractionResult useWithoutItem(@NotNull final BlockState state,
+                                                     @NotNull final Level level,
+                                                     @NotNull final BlockPos pos,
+                                                     @NotNull final Player player,
+                                                     @NotNull final BlockHitResult hit) {
+        if (level.isClientSide()) return InteractionResult.SUCCESS;
         final BlockPos rootPos = rootPos(pos, state);
         final BlockState root = level.getBlockState(rootPos);
         if (!(root.getBlock() instanceof final HbmVehicleDoorBlock doorBlock)) return InteractionResult.PASS;
-        if (isDoorMoving(level, rootPos, root)) return InteractionResult.CONSUME;
-
-        final ItemStack held = player.getItemInHand(hand);
-        if (player.isShiftKeyDown() && held.is(MdrItems.HBM_SCREWDRIVER.get())) {
-            return doorBlock.applyHbmScrewdriverMode(level, pos, state, player, HbmScrewdriverItem.modeFromStack(held));
-        }
+        if (isDoorMoving(level, rootPos)) return InteractionResult.CONSUME;
 
         if (!doorBlock.canManualToggle(level, rootPos)) return InteractionResult.CONSUME;
         doorBlock.setDoorOpen(level, rootPos, !root.getValue(OPEN), player);
@@ -262,12 +239,12 @@ public class HbmVehicleDoorBlock extends Block implements EntityBlock, CustomDoo
                                                                 @NotNull final BlockPos pos,
                                                                 @NotNull final BlockState state,
                                                                 @NotNull final Player player) {
-        if (level.isClientSide) return InteractionResult.SUCCESS;
+        if (level.isClientSide()) return InteractionResult.SUCCESS;
 
         final BlockPos rootPos = rootPos(pos, state);
         final BlockState root = level.getBlockState(rootPos);
         if (root.getBlock() != this) return InteractionResult.PASS;
-        if (isDoorMoving(level, rootPos, root)) return InteractionResult.CONSUME;
+        if (isDoorMoving(level, rootPos)) return InteractionResult.CONSUME;
 
         if (level.getBlockEntity(rootPos) instanceof final HbmVehicleDoorBlockEntity door) {
             final int skinIndex = door.cycleSkin();
@@ -284,12 +261,12 @@ public class HbmVehicleDoorBlock extends Block implements EntityBlock, CustomDoo
                                                                         @NotNull final BlockPos pos,
                                                                         @NotNull final BlockState state,
                                                                         @NotNull final Player player) {
-        if (level.isClientSide) return InteractionResult.SUCCESS;
+        if (level.isClientSide()) return InteractionResult.SUCCESS;
 
         final BlockPos rootPos = rootPos(pos, state);
         final BlockState root = level.getBlockState(rootPos);
         if (root.getBlock() != this) return InteractionResult.PASS;
-        if (isDoorMoving(level, rootPos, root)) return InteractionResult.CONSUME;
+        if (isDoorMoving(level, rootPos)) return InteractionResult.CONSUME;
 
         if (level.getBlockEntity(rootPos) instanceof final HbmVehicleDoorBlockEntity door) {
             final HbmDoorRedstoneMode mode = door.cycleRedstoneMode();
@@ -311,56 +288,54 @@ public class HbmVehicleDoorBlock extends Block implements EntityBlock, CustomDoo
                                 @NotNull final Level level,
                                 @NotNull final BlockPos pos,
                                 @NotNull final Block neighbourBlock,
-                                @NotNull final BlockPos neighbourPos,
+                                @Nullable final Orientation orientation,
                                 final boolean isMoving) {
-        if (level.isClientSide) return;
+        if (level.isClientSide()) return;
 
         final BlockPos rootPos = rootPos(pos, state);
         final BlockState root = level.getBlockState(rootPos);
         if (!(root.getBlock() instanceof final HbmVehicleDoorBlock doorBlock)) return;
-        if (isSameDoorPart(level, neighbourPos, rootPos)) return;
 
         final boolean powered = doorBlock.hasDoorSignal(level, rootPos, root.getValue(FACING));
         final boolean wasPowered = root.getValue(POWERED);
         if (powered == wasPowered) return;
 
-        if (!(level.getBlockEntity(rootPos) instanceof final HbmVehicleDoorBlockEntity door) || door.isMoving(root.getValue(OPEN))) return;
+        if (!(level.getBlockEntity(rootPos) instanceof final HbmVehicleDoorBlockEntity door) || door.isMoving()) return;
 
         doorBlock.setDoorPowered(level, rootPos, powered);
         doorBlock.applyRedstoneChange(level, rootPos, powered, door.getRedstoneMode());
     }
 
     @Override
-    public void onRemove(@NotNull final BlockState state,
-                         @NotNull final Level level,
-                         @NotNull final BlockPos pos,
-                         @NotNull final BlockState newState,
-                         final boolean isMoving) {
-        if (!level.isClientSide && state.getBlock() != newState.getBlock()) {
-            removeDoorParts(level, rootPos(pos, state), state.getValue(FACING));
-        }
-        super.onRemove(state, level, pos, newState, isMoving);
+    protected void affectNeighborsAfterRemoval(@NotNull final BlockState state,
+                                               @NotNull final ServerLevel level,
+                                               @NotNull final BlockPos pos,
+                                               final boolean movedByPiston) {
+        removeDoorParts(level, rootPos(pos, state), state.getValue(FACING));
+        super.affectNeighborsAfterRemoval(state, level, pos, movedByPiston);
     }
 
     @Override
-    public void playerWillDestroy(@NotNull final Level level,
-                                  @NotNull final BlockPos pos,
-                                  @NotNull final BlockState state,
-                                  @NotNull final Player player) {
-        if (!level.isClientSide && !player.isCreative()) {
+    public @NotNull BlockState playerWillDestroy(@NotNull final Level level,
+                                                 @NotNull final BlockPos pos,
+                                                 @NotNull final BlockState state,
+                                                 @NotNull final Player player) {
+        if (!level.isClientSide() && !player.isCreative()) {
             final BlockPos rootPos = rootPos(pos, state);
             final BlockState root = level.getBlockState(rootPos);
             if (root.getBlock() == this && !pos.equals(rootPos)) {
                 level.destroyBlock(rootPos, true, player);
             }
         }
-        super.playerWillDestroy(level, pos, state, player);
+        return super.playerWillDestroy(level, pos, state, player);
     }
 
     @Override
-    public @NotNull ItemStack getCloneItemStack(@NotNull final BlockGetter level,
+    public @NotNull ItemStack getCloneItemStack(@NotNull final LevelReader level,
                                                 @NotNull final BlockPos pos,
-                                                @NotNull final BlockState state) {
+                                                @NotNull final BlockState state,
+                                                final boolean includeData,
+                                                @NotNull final Player player) {
         final BlockPos rootPos = rootPos(pos, state);
         final HbmDoorRedstoneMode redstoneMode = level.getBlockEntity(rootPos) instanceof final HbmVehicleDoorBlockEntity door ? door.getRedstoneMode() : HbmDoorRedstoneMode.DEFAULT;
         return HbmVehicleDoorBlockItem.stackWithSkinAndRedstone(MdrItems.HBM_VEHICLE_DOOR.get(), skinIndexAt(level, rootPos), redstoneMode);
@@ -376,21 +351,6 @@ public class HbmVehicleDoorBlock extends Block implements EntityBlock, CustomDoo
         final int skinIndex = stateSkin != 0 || entitySkin == 0 ? stateSkin : entitySkin;
         final HbmDoorRedstoneMode redstoneMode = blockEntity instanceof final HbmVehicleDoorBlockEntity doorEntity ? doorEntity.getRedstoneMode() : HbmDoorRedstoneMode.DEFAULT;
         return List.of(HbmVehicleDoorBlockItem.stackWithSkinAndRedstone(MdrItems.HBM_VEHICLE_DOOR.get(), skinIndex, redstoneMode));
-    }
-
-    @Override
-    public boolean onDestroyedByPlayer(@NotNull final BlockState state,
-                                       @NotNull final Level level,
-                                       @NotNull final BlockPos pos,
-                                       @NotNull final Player player,
-                                       final boolean willHarvest,
-                                       @NotNull final FluidState fluid) {
-        if (player.isCreative()) {
-            final BlockPos rootPos = rootPos(pos, state);
-            if (pos.equals(rootPos)) removeDoorParts(level, rootPos, state.getValue(FACING));
-            return level.setBlock(pos, fluid.createLegacyBlock(), level.isClientSide ? Block.UPDATE_ALL_IMMEDIATE : Block.UPDATE_ALL);
-        }
-        return super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid);
     }
 
     @Override
@@ -465,18 +425,12 @@ public class HbmVehicleDoorBlock extends Block implements EntityBlock, CustomDoo
                 || state.getValue(PART) != HbmVehicleDoorPart.ROOT) {
             return null;
         }
-        if (level.isClientSide) {
+        if (level.isClientSide()) {
             return (lvl, pos, st, be) -> HbmVehicleDoorBlockEntity.tickClient(lvl, pos, st, (HbmVehicleDoorBlockEntity) be);
         }
         return (lvl, pos, st, be) -> HbmVehicleDoorBlockEntity.tickServer(lvl, pos, st, (HbmVehicleDoorBlockEntity) be);
     }
 
-
-    private boolean isSameDoorPart(final Level level, final BlockPos neighbourPos, final BlockPos rootPos) {
-        final BlockState neighbour = level.getBlockState(neighbourPos);
-        if (neighbour.getBlock() != this) return false;
-        return rootPos(neighbourPos, neighbour).equals(rootPos);
-    }
 
     private boolean canPlaceDoor(final LevelAccessor level, final BlockPos rootPos, final Direction facing, final BlockPlaceContext context) {
         for (int x = 0; x < WIDTH; x++) {
@@ -523,7 +477,7 @@ public class HbmVehicleDoorBlock extends Block implements EntityBlock, CustomDoo
                 final BlockPos partPos = partPos(rootPos, facing, x, y);
                 BlockState state = level.getBlockState(partPos);
                 if (state.getBlock() != this || !state.hasProperty(SKIN)) continue;
-                level.setBlock(partPos, state.setValue(SKIN, normalisedSkin), Block.UPDATE_ALL);
+                level.setBlock(partPos, state.setValue(SKIN, normalisedSkin), STATE_UPDATE_FLAGS);
             }
         }
     }
@@ -561,12 +515,16 @@ public class HbmVehicleDoorBlock extends Block implements EntityBlock, CustomDoo
     private void setDoorOpen(final Level level, final BlockPos rootPos, final boolean open, @Nullable final Player player) {
         final BlockState root = level.getBlockState(rootPos);
         if (root.getValue(OPEN) == open) return;
-        final Direction facing = root.getValue(FACING);
-        updateDoorParts(level, rootPos, facing, null, open);
-        level.gameEvent(player, open ? GameEvent.BLOCK_OPEN : GameEvent.BLOCK_CLOSE, rootPos);
-        if (level instanceof final ServerLevel serverLevel) {
-            MdrNetwork.sendHbmVehicleDoorSound(serverLevel, rootPos, true);
+        if (level.getBlockEntity(rootPos) instanceof final HbmVehicleDoorBlockEntity door) {
+            door.setOpen(open);
+            level.gameEvent(player, open ? GameEvent.BLOCK_OPEN : GameEvent.BLOCK_CLOSE, rootPos);
         }
+    }
+
+    public void setWholeOpen(final Level level, final BlockPos rootPos, final BlockState rootState, final boolean open) {
+        if (rootState.getValue(OPEN) == open) return;
+        updateDoorParts(level, rootPos, rootState.getValue(FACING), null, open);
+        level.gameEvent(null, open ? GameEvent.BLOCK_OPEN : GameEvent.BLOCK_CLOSE, rootPos);
     }
 
     private void updateDoorParts(final Level level,
@@ -581,16 +539,13 @@ public class HbmVehicleDoorBlock extends Block implements EntityBlock, CustomDoo
                 if (state.getBlock() != this) continue;
                 if (powered != null) state = state.setValue(POWERED, powered);
                 if (open != null) state = state.setValue(OPEN, open);
-                level.setBlock(partPos, state, Block.UPDATE_ALL);
+                level.setBlock(partPos, state, STATE_UPDATE_FLAGS);
             }
         }
     }
 
-    private static boolean isDoorMoving(final Level level, final BlockPos rootPos, final BlockState root) {
-        if (level.getBlockEntity(rootPos) instanceof final HbmVehicleDoorBlockEntity door) {
-            return door.isMoving(root.getValue(OPEN));
-        }
-        return false;
+    private static boolean isDoorMoving(final Level level, final BlockPos rootPos) {
+        return level.getBlockEntity(rootPos) instanceof final HbmVehicleDoorBlockEntity door && door.isMoving();
     }
 
     private boolean hasDoorSignal(final Level level, final BlockPos rootPos, final Direction facing) {

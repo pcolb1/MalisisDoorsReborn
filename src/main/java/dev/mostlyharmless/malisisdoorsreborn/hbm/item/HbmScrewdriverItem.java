@@ -2,9 +2,12 @@ package dev.mostlyharmless.malisisdoorsreborn.hbm.item;
 
 import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmScrewdriverDoorTarget;
 import dev.mostlyharmless.malisisdoorsreborn.item.TooltipItem;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
@@ -31,7 +34,7 @@ public class HbmScrewdriverItem extends TooltipItem {
             return InteractionResult.PASS;
         }
 
-        if (level.isClientSide) {
+        if (level.isClientSide()) {
             return InteractionResult.SUCCESS;
         }
 
@@ -44,15 +47,19 @@ public class HbmScrewdriverItem extends TooltipItem {
         );
     }
 
-    public static @NotNull HbmScrewdriverMode modeFromStack(@NotNull final net.minecraft.world.item.ItemStack stack) {
-        final CompoundTag tag = stack.getTag();
+    public static @NotNull HbmScrewdriverMode modeFromStack(@NotNull final ItemStack stack) {
+        final CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        final CompoundTag tag = data == null ? null : data.copyTag();
         if (tag == null || !tag.contains(MODE_TAG)) return HbmScrewdriverMode.CYCLE_DOOR_SKIN;
-        return HbmScrewdriverMode.values()[Math.floorMod(tag.getInt(MODE_TAG), HbmScrewdriverMode.values().length)];
+        return HbmScrewdriverMode.values()[Math.floorMod(tag.getIntOr(MODE_TAG, 0), HbmScrewdriverMode.values().length)];
     }
 
-    public static @NotNull HbmScrewdriverMode cycleMode(@NotNull final net.minecraft.world.item.ItemStack stack) {
+    public static @NotNull HbmScrewdriverMode cycleMode(@NotNull final ItemStack stack) {
         final HbmScrewdriverMode mode = modeFromStack(stack).next();
-        stack.getOrCreateTag().putInt(MODE_TAG, mode.ordinal());
+        final CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        final CompoundTag tag = data == null ? new CompoundTag() : data.copyTag();
+        tag.putInt(MODE_TAG, mode.ordinal());
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
         return mode;
     }
 

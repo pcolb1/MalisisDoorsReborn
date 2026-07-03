@@ -4,19 +4,26 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmQeContainmentDoorBlock;
+import net.minecraft.client.Minecraft;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.blockentity.HbmQeContainmentDoorBlockEntity;
 import dev.mostlyharmless.malisisdoorsreborn.client.render.door.CustomDoorBreakingOverlay;
 import dev.mostlyharmless.malisisdoorsreborn.core.MdrDefaults;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
+import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
+import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.renderer.state.CameraRenderState;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
-import org.joml.Matrix3f;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 
 import java.io.BufferedReader;
@@ -28,13 +35,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public class HbmQeContainmentDoorBlockEntityRenderer implements BlockEntityRenderer<HbmQeContainmentDoorBlockEntity> {
+public class HbmQeContainmentDoorBlockEntityRenderer implements BlockEntityRenderer<HbmQeContainmentDoorBlockEntity, HbmQeContainmentDoorBlockEntityRenderer.QeContainmentDoorRenderState> {
 
-    private static final ResourceLocation[] TEXTURES = {
-            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/containment_door.png"),
-            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/containment_door_trefoil.png"),
-            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/containment_door_trefoil_yellow.png")
+    private static final Identifier[] TEXTURES = {
+            Identifier.fromNamespaceAndPath(MdrDefaults.MOD_ID, "block/hbm_qe_containment_door_skin_default"),
+            Identifier.fromNamespaceAndPath(MdrDefaults.MOD_ID, "block/hbm_qe_containment_door_skin_trefoil"),
+            Identifier.fromNamespaceAndPath(MdrDefaults.MOD_ID, "block/hbm_qe_containment_door_skin_trefoil_yellow")
     };
+    private static final Identifier BLOCK_ATLAS_ID = Identifier.withDefaultNamespace("blocks");
     private static final ObjModel MODEL = ObjModel.load("assets/malisisdoorsreborn/models/pheodoors/containment_door.obj");
     private static final float MAX_RAISE = 2.25F;
     private static final float MODEL_TOP_Y = 3.0F;
@@ -50,26 +58,50 @@ public class HbmQeContainmentDoorBlockEntityRenderer implements BlockEntityRende
     }
 
     @Override
-    public void render(@NotNull final HbmQeContainmentDoorBlockEntity be,
-                       final float partialTick,
-                       @NotNull final PoseStack poseStack,
-                       @NotNull final MultiBufferSource buffer,
-                       final int packedLight,
-                       final int packedOverlay) {
+    public @NotNull AABB getRenderBoundingBox(@NotNull final HbmQeContainmentDoorBlockEntity be) {
+        final BlockPos pos = be.getBlockPos();
+        return new AABB(
+                pos.getX() - 4.0D, pos.getY(), pos.getZ() - 4.0D,
+                pos.getX() + 4.0D, pos.getY() + 5.0D, pos.getZ() + 4.0D
+        );
+    }
+
+    @Override
+    public @NotNull QeContainmentDoorRenderState createRenderState() {
+        return new QeContainmentDoorRenderState();
+    }
+
+    @Override
+    public void extractRenderState(@NotNull final HbmQeContainmentDoorBlockEntity be,
+                                   @NotNull final QeContainmentDoorRenderState renderState,
+                                   final float partialTick,
+                                   @NotNull final Vec3 cameraPos,
+                                   @Nullable final ModelFeatureRenderer.CrumblingOverlay crumblingOverlay) {
+        BlockEntityRenderer.super.extractRenderState(be, renderState, partialTick, cameraPos,
+                CustomDoorBreakingOverlay.shouldRenderNormalDuringVanillaBreakingPass(crumblingOverlay, be.getBlockPos())
+                        ? null
+                        : crumblingOverlay);
+        renderState.clear();
+
         final BlockState state = be.getBlockState();
         if (!(state.getBlock() instanceof HbmQeContainmentDoorBlock)) return;
         if (state.getValue(HbmQeContainmentDoorBlock.PART) != HbmQeContainmentDoorBlock.HbmQeContainmentDoorPart.ROOT) return;
 
-        final Direction facing = state.getValue(HbmQeContainmentDoorBlock.FACING);
-        final float raise = Math.max(0.0F, Math.min(MAX_RAISE, be.getProgress(partialTick) * MAX_RAISE));
-        final Minecraft minecraft = Minecraft.getInstance();
-        if (CustomDoorBreakingOverlay.shouldRenderNormalDuringVanillaBreakingPass(minecraft, buffer, be.getBlockPos())) {
-            renderModel(poseStack, minecraft.renderBuffers().bufferSource(), packedLight, packedOverlay, facing, raise, skinIndexForRender(state, be));
-            return;
-        }
-        renderModel(poseStack, buffer, packedLight, packedOverlay, facing, raise, skinIndexForRender(state, be));
+        renderState.state = state;
+        renderState.facing = state.getValue(HbmQeContainmentDoorBlock.FACING);
+        renderState.raise = Math.max(0.0F, Math.min(MAX_RAISE, be.getProgress(partialTick) * MAX_RAISE));
+        renderState.skinIndex = skinIndexForRender(state, be);
+        renderState.packedLight = renderState.lightCoords;
     }
 
+    @Override
+    public void submit(@NotNull final QeContainmentDoorRenderState renderState,
+                       @NotNull final PoseStack poseStack,
+                       @NotNull final SubmitNodeCollector collector,
+                       @NotNull final CameraRenderState cameraState) {
+        if (renderState.state == null || renderState.facing == null) return;
+        submitModel(poseStack, collector, renderState.packedLight, 0, renderState.facing, renderState.raise, renderState.skinIndex);
+    }
 
     private static int skinIndexForRender(@NotNull final BlockState state, @NotNull final HbmQeContainmentDoorBlockEntity be) {
         final int entitySkin = be.getSkinIndex();
@@ -78,51 +110,63 @@ public class HbmQeContainmentDoorBlockEntityRenderer implements BlockEntityRende
         return stateSkin != 0 || entitySkin == 0 ? stateSkin : entitySkin;
     }
 
-    public static void renderItem(@NotNull final PoseStack poseStack,
-                                  @NotNull final MultiBufferSource buffer,
+    public static void submitItem(@NotNull final PoseStack poseStack,
+                                  @NotNull final SubmitNodeCollector collector,
                                   final int packedLight,
                                   final int packedOverlay,
                                   final int skinIndex) {
         poseStack.pushPose();
         poseStack.translate(0.5F, -0.05F, 0.5F);
         poseStack.scale(0.26F, 0.26F, 0.26F);
-        renderModel(poseStack, buffer, packedLight, packedOverlay, Direction.SOUTH, 0.0F, skinIndex);
+        submitModel(poseStack, collector, packedLight, packedOverlay, Direction.SOUTH, 0.0F, skinIndex);
         poseStack.popPose();
     }
 
-    private static void renderModel(@NotNull final PoseStack poseStack,
-                                    @NotNull final MultiBufferSource buffer,
+    @SuppressWarnings("resource")
+    private static void submitModel(@NotNull final PoseStack poseStack,
+                                    @NotNull final SubmitNodeCollector collector,
                                     final int packedLight,
                                     final int packedOverlay,
                                     @NotNull final Direction facing,
                                     final float raise,
                                     final int skinIndex) {
-        final ResourceLocation texture = TEXTURES[Math.floorMod(skinIndex, TEXTURES.length)];
-        final VertexConsumer vertexConsumer = buffer.getBuffer(RenderType.entityCutoutNoCull(texture));
+        final TextureAtlasSprite sprite = spriteFor(skinIndex);
 
         poseStack.pushPose();
-        poseStack.translate(0.5F, 0.0F, 0.5F);
-        poseStack.mulPose(Axis.YP.rotationDegrees(yawFor(facing)));
+        applyHbmTransform(poseStack, facing);
 
-        // Literal RenderContainmentDoor contract after RenderDoorGeneric has translated and rotated the root.
-        poseStack.translate(0.25F, 0.0F, 0.0F);
-
-        MODEL.frame.render(poseStack.last(), vertexConsumer, packedLight, packedOverlay);
+        collector.submitCustomGeometry(poseStack, RenderTypes.cutoutMovingBlock(), (pose, vertexConsumer) ->
+                MODEL.frame.render(pose, vertexConsumer, sprite, packedLight, packedOverlay, VertexTransform.NONE));
 
         if (MdrDefaults.FIRE_DOOR_CLIP_TO_FRAME && raise > 0.0F) {
-            MODEL.door.renderClippedMaxY(poseStack.last(), vertexConsumer, packedLight, packedOverlay, raise, FRAME_CLIP_MAX_Y);
+            collector.submitCustomGeometry(poseStack, RenderTypes.cutoutMovingBlock(), (pose, vertexConsumer) ->
+                    MODEL.door.renderClippedMaxY(pose, vertexConsumer, sprite, packedLight, packedOverlay, raise, FRAME_CLIP_MAX_Y));
         } else {
             poseStack.pushPose();
             poseStack.translate(0.0F, raise, 0.0F);
-            MODEL.door.render(poseStack.last(), vertexConsumer, packedLight, packedOverlay);
+            collector.submitCustomGeometry(poseStack, RenderTypes.cutoutMovingBlock(), (pose, vertexConsumer) ->
+                    MODEL.door.render(pose, vertexConsumer, sprite, packedLight, packedOverlay, VertexTransform.NONE));
             poseStack.popPose();
         }
 
         poseStack.popPose();
     }
 
+    private static void applyHbmTransform(@NotNull final PoseStack poseStack, @NotNull final Direction facing) {
+        poseStack.translate(0.5F, 0.0F, 0.5F);
+        poseStack.mulPose(Axis.YP.rotationDegrees(yawFor(facing)));
+        poseStack.translate(0.25F, 0.0F, 0.0F);
+    }
+
+    private static TextureAtlasSprite spriteFor(final int skinIndex) {
+        return Minecraft.getInstance()
+                .getAtlasManager()
+                .getAtlasOrThrow(BLOCK_ATLAS_ID)
+                .getSprite(TEXTURES[Math.floorMod(skinIndex, TEXTURES.length)]);
+    }
+
     private static float yawFor(final Direction facing) {
-        // HBM RenderDoorGeneric rotation before RenderFireDoor's own fixed +90° rotation:
+        // HBM RenderDoorGeneric rotation before RenderContainmentDoor:
         // meta SOUTH -> 270°, EAST -> 0°, NORTH -> 90°, WEST -> 180°.
         return switch (facing) {
             case EAST -> 0.0F;
@@ -252,37 +296,43 @@ public class HbmQeContainmentDoorBlockEntityRenderer implements BlockEntityRende
             this.faces = List.copyOf(faces);
         }
 
+        @SuppressWarnings("SameParameterValue")
         private void render(final PoseStack.Pose pose,
                             final VertexConsumer vertexConsumer,
+                            @Nullable final TextureAtlasSprite sprite,
                             final int packedLight,
-                            final int packedOverlay) {
-            for (ObjFace face : faces) face.render(pose, vertexConsumer, packedLight, packedOverlay);
+                            final int packedOverlay,
+                            final VertexTransform transform) {
+            for (ObjFace face : faces) face.render(pose, vertexConsumer, sprite, packedLight, packedOverlay, transform);
         }
 
         @SuppressWarnings("SameParameterValue")
         private void renderClippedMaxY(final PoseStack.Pose pose,
                                        final VertexConsumer vertexConsumer,
+                                       @Nullable final TextureAtlasSprite sprite,
                                        final int packedLight,
                                        final int packedOverlay,
                                        final float offsetY,
                                        final float maxY) {
-            for (ObjFace face : faces) face.renderClippedMaxY(pose, vertexConsumer, packedLight, packedOverlay, offsetY, maxY);
+            for (ObjFace face : faces) face.renderClippedMaxY(pose, vertexConsumer, sprite, packedLight, packedOverlay, offsetY, maxY);
         }
     }
 
     private record ObjFace(ObjVertex[] vertices) {
         private void render(final PoseStack.Pose pose,
                             final VertexConsumer vertexConsumer,
+                            @Nullable final TextureAtlasSprite sprite,
                             final int packedLight,
-                            final int packedOverlay) {
+                            final int packedOverlay,
+                            final VertexTransform transform) {
             if (vertices.length == 3) {
-                emit(vertices[0], pose, vertexConsumer, packedLight, packedOverlay);
-                emit(vertices[1], pose, vertexConsumer, packedLight, packedOverlay);
-                emit(vertices[2], pose, vertexConsumer, packedLight, packedOverlay);
-                emit(vertices[2], pose, vertexConsumer, packedLight, packedOverlay);
+                emit(vertices[0], pose, vertexConsumer, sprite, packedLight, packedOverlay, transform);
+                emit(vertices[1], pose, vertexConsumer, sprite, packedLight, packedOverlay, transform);
+                emit(vertices[2], pose, vertexConsumer, sprite, packedLight, packedOverlay, transform);
+                emit(vertices[2], pose, vertexConsumer, sprite, packedLight, packedOverlay, transform);
                 return;
             }
-            for (ObjVertex vertex : vertices) emit(vertex, pose, vertexConsumer, packedLight, packedOverlay);
+            for (ObjVertex vertex : vertices) emit(vertex, pose, vertexConsumer, sprite, packedLight, packedOverlay, transform);
         }
 
         @SuppressWarnings("SameParameterValue")
@@ -296,6 +346,7 @@ public class HbmQeContainmentDoorBlockEntityRenderer implements BlockEntityRende
 
         private void renderClippedMaxY(final PoseStack.Pose pose,
                                        final VertexConsumer vertexConsumer,
+                                       @Nullable final TextureAtlasSprite sprite,
                                        final int packedLight,
                                        final int packedOverlay,
                                        final float offsetY,
@@ -305,14 +356,14 @@ public class HbmQeContainmentDoorBlockEntityRenderer implements BlockEntityRende
             clipped = clipMaxY(clipped, maxY);
             if (clipped.size() < 3) return;
 
-            final ObjVertex first = clipped.get(0);
+            final ObjVertex first = clipped.getFirst();
             for (int i = 1; i < clipped.size() - 1; i++) {
                 final ObjVertex second = clipped.get(i);
                 final ObjVertex third = clipped.get(i + 1);
-                emit(first, pose, vertexConsumer, packedLight, packedOverlay);
-                emit(second, pose, vertexConsumer, packedLight, packedOverlay);
-                emit(third, pose, vertexConsumer, packedLight, packedOverlay);
-                emit(third, pose, vertexConsumer, packedLight, packedOverlay);
+                emit(first, pose, vertexConsumer, sprite, packedLight, packedOverlay, VertexTransform.NONE);
+                emit(second, pose, vertexConsumer, sprite, packedLight, packedOverlay, VertexTransform.NONE);
+                emit(third, pose, vertexConsumer, sprite, packedLight, packedOverlay, VertexTransform.NONE);
+                emit(third, pose, vertexConsumer, sprite, packedLight, packedOverlay, VertexTransform.NONE);
             }
         }
 
@@ -320,7 +371,7 @@ public class HbmQeContainmentDoorBlockEntityRenderer implements BlockEntityRende
             if (input.isEmpty()) return input;
 
             final List<ObjVertex> output = new ArrayList<>(input.size() + 1);
-            ObjVertex previous = input.get(input.size() - 1);
+            ObjVertex previous = input.getLast();
             boolean previousInside = previous.y <= maxY;
 
             for (ObjVertex current : input) {
@@ -340,20 +391,83 @@ public class HbmQeContainmentDoorBlockEntityRenderer implements BlockEntityRende
             return start.lerp(end, Math.max(0.0F, Math.min(1.0F, t)));
         }
 
-        private static void emit(final ObjVertex vertex,
+        private static void emit(final ObjVertex source,
                                  final PoseStack.Pose pose,
                                  final VertexConsumer vertexConsumer,
+                                 @Nullable final TextureAtlasSprite sprite,
                                  final int packedLight,
-                                 final int packedOverlay) {
+                                 final int packedOverlay,
+                                 final VertexTransform transform) {
+            final MutableVertex vertex = new MutableVertex(source);
+            transform.apply(vertex);
             final Matrix4f poseMatrix = pose.pose();
-            final Matrix3f normalMatrix = pose.normal();
-            vertexConsumer.vertex(poseMatrix, vertex.x, vertex.y, vertex.z)
-                    .color(255, 255, 255, 255)
-                    .uv(vertex.u, vertex.v)
-                    .overlayCoords(packedOverlay)
-                    .uv2(packedLight)
-                    .normal(normalMatrix, vertex.nx, vertex.ny, vertex.nz)
-                    .endVertex();
+            vertexConsumer.addVertex(poseMatrix, vertex.x, vertex.y, vertex.z)
+                    .setColor(255, 255, 255, 255)
+                    .setUv(mappedU(sprite, vertex.u), mappedV(sprite, vertex.v))
+                    .setOverlay(packedOverlay)
+                    .setUv2(packedLight & 0xFFFF, packedLight >> 16)
+                    .setNormal(pose, vertex.nx, vertex.ny, vertex.nz);
+        }
+    }
+
+    private static float mappedU(@Nullable final TextureAtlasSprite sprite, final float u) {
+        return sprite == null ? u : atlasU(sprite, u);
+    }
+
+    private static float mappedV(@Nullable final TextureAtlasSprite sprite, final float v) {
+        return sprite == null ? v : atlasV(sprite, v);
+    }
+
+    private static float atlasU(final TextureAtlasSprite sprite, final float u) {
+        return sprite.getU0() + ((sprite.getU1() - sprite.getU0()) * u);
+    }
+
+    private static float atlasV(final TextureAtlasSprite sprite, final float v) {
+        return sprite.getV0() + ((sprite.getV1() - sprite.getV0()) * v);
+    }
+
+    @FunctionalInterface
+    private interface VertexTransform {
+        VertexTransform NONE = ignored -> {};
+
+        void apply(MutableVertex vertex);
+    }
+
+    private static final class MutableVertex {
+        private final float x;
+        private final float y;
+        private final float z;
+        private final float u;
+        private final float v;
+        private final float nx;
+        private final float ny;
+        private final float nz;
+
+        private MutableVertex(final ObjVertex source) {
+            this.x = source.x;
+            this.y = source.y;
+            this.z = source.z;
+            this.u = source.u;
+            this.v = source.v;
+            this.nx = source.nx;
+            this.ny = source.ny;
+            this.nz = source.nz;
+        }
+    }
+
+    public static final class QeContainmentDoorRenderState extends BlockEntityRenderState {
+        private BlockState state;
+        private Direction facing;
+        private float raise;
+        private int skinIndex;
+        private int packedLight;
+
+        private void clear() {
+            state = null;
+            facing = null;
+            raise = 0.0F;
+            skinIndex = 0;
+            packedLight = 0;
         }
     }
 
