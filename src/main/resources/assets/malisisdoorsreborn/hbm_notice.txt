@@ -1,0 +1,5 @@
+Selected assets in this mod are derived from the original Minecraft 1.7.10 version of HBM's Nuclear Tech Mod by HBMTheBobcat / HbmMods.
+
+HBM-derived assets are licensed under the GNU Lesser General Public License v3.0 and have been modified or repackaged for MalisisDoorsReborn.
+
+See META-INF/THIRD_PARTY_NOTICES.md and META-INF/licenses/ for details.
