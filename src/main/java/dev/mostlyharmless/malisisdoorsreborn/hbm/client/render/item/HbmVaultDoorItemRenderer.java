@@ -1,8 +1,8 @@
 package dev.mostlyharmless.malisisdoorsreborn.hbm.client.render.item;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import dev.mostlyharmless.malisisdoorsreborn.hbm.client.render.HbmVehicleDoorBlockEntityRenderer;
-import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmVehicleDoorBlockItem;
+import dev.mostlyharmless.malisisdoorsreborn.hbm.client.render.HbmVaultDoorBlockEntityRenderer;
+import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmVaultDoorBlockItem;
 import net.minecraft.client.model.geom.EntityModelSet;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -11,9 +11,9 @@ import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
-public class HbmVehicleDoorItemRenderer extends BlockEntityWithoutLevelRenderer {
+public class HbmVaultDoorItemRenderer extends BlockEntityWithoutLevelRenderer {
 
-    public HbmVehicleDoorItemRenderer(final BlockEntityRenderDispatcher dispatcher,
+    public HbmVaultDoorItemRenderer(final BlockEntityRenderDispatcher dispatcher,
                                    final EntityModelSet modelSet) {
         super(dispatcher, modelSet);
     }
@@ -27,12 +27,12 @@ public class HbmVehicleDoorItemRenderer extends BlockEntityWithoutLevelRenderer 
                              final int packedOverlay) {
         if (stack.isEmpty()) return;
 
-        HbmVehicleDoorBlockEntityRenderer.renderItem(
+        HbmVaultDoorBlockEntityRenderer.renderItem(
                 poseStack,
                 buffer,
                 packedLight,
                 packedOverlay,
-                HbmVehicleDoorBlockItem.skinIndexForRender(stack)
+                HbmVaultDoorBlockItem.skinIndexForRender(stack)
         );
     }
 }

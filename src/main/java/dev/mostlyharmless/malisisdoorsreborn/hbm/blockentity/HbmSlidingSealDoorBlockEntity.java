@@ -1,17 +1,15 @@
 package dev.mostlyharmless.malisisdoorsreborn.hbm.blockentity;
 
-import dev.mostlyharmless.malisisdoorsreborn.block.CustomSkinnedDoorHelper;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmDoorRedstoneMode;
 import dev.mostlyharmless.malisisdoorsreborn.access.AccessControlledDoor;
 import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessLevel;
-import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmFireDoorBlock;
+import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmSlidingSealDoorBlock;
+import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmSlidingSealDoorBlockItem;
 import dev.mostlyharmless.malisisdoorsreborn.registry.MdrBlockEntities;
-import dev.mostlyharmless.malisisdoorsreborn.network.MdrNetwork;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -22,19 +20,18 @@ import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public class HbmFireDoorBlockEntity extends BlockEntity implements AccessControlledDoor {
+public class HbmSlidingSealDoorBlockEntity extends BlockEntity implements AccessControlledDoor {
 
-    private static final int OPENING_TIME = 160;
+    private static final int OPENING_TIME = 20;
 
     private float progressPrev = 0.0F;
     private float progress = 0.0F;
     private int skinIndex = 0;
     private HbmDoorRedstoneMode redstoneMode = HbmDoorRedstoneMode.DEFAULT;
     private DoorAccessLevel accessLevel = DoorAccessLevel.DEFAULT;
-    private boolean skinReconciled = false;
 
-    public HbmFireDoorBlockEntity(final BlockPos pos, final BlockState state) {
-        super(MdrBlockEntities.HBM_FIRE_DOOR.get(), pos, state);
+    public HbmSlidingSealDoorBlockEntity(final BlockPos pos, final BlockState state) {
+        super(MdrBlockEntities.HBM_SLIDING_SEAL_DOOR.get(), pos, state);
         snapProgressToState(state);
     }
 
@@ -42,7 +39,7 @@ public class HbmFireDoorBlockEntity extends BlockEntity implements AccessControl
     public static void tickClient(@NotNull final Level level,
                                   @NotNull final BlockPos pos,
                                   @NotNull final BlockState state,
-                                  @NotNull final HbmFireDoorBlockEntity be) {
+                                  @NotNull final HbmSlidingSealDoorBlockEntity be) {
         be.progressPrev = be.progress;
         final boolean open = state.hasProperty(BlockStateProperties.OPEN) && state.getValue(BlockStateProperties.OPEN);
         be.progress = Mth.approach(be.progress, open ? 1.0F : 0.0F, 1.0F / OPENING_TIME);
@@ -51,17 +48,14 @@ public class HbmFireDoorBlockEntity extends BlockEntity implements AccessControl
     public static void tickServer(@NotNull final Level level,
                                   @NotNull final BlockPos pos,
                                   @NotNull final BlockState state,
-                                  @NotNull final HbmFireDoorBlockEntity be) {
-        be.reconcileSkinOnce(level, pos, state);
+                                  @NotNull final HbmSlidingSealDoorBlockEntity be) {
         be.progressPrev = be.progress;
         final boolean open = state.hasProperty(BlockStateProperties.OPEN) && state.getValue(BlockStateProperties.OPEN);
         final float target = open ? 1.0F : 0.0F;
         final float previous = be.progress;
         be.progress = Mth.approach(be.progress, target, 1.0F / OPENING_TIME);
-        if (previous != target && be.progress == target) {
-            if (level instanceof final ServerLevel serverLevel) {
-                MdrNetwork.sendHbmFireDoorSound(serverLevel, pos, false);
-            }
+        if (previous != target && be.progress == target && state.getBlock() instanceof final HbmSlidingSealDoorBlock doorBlock) {
+            doorBlock.playStopSound(level, pos);
         }
     }
 
@@ -80,34 +74,25 @@ public class HbmFireDoorBlockEntity extends BlockEntity implements AccessControl
     }
 
     private void loadShared(@NotNull final CompoundTag tag) {
-        skinIndex = Math.floorMod(tag.getInt("SkinIndex"), 5);
+        skinIndex = Math.floorMod(tag.getInt("SkinIndex"), HbmSlidingSealDoorBlockItem.SKIN_COUNT);
         redstoneMode = tag.contains("RedstoneMode") ? HbmDoorRedstoneMode.fromOrdinal(tag.getInt("RedstoneMode")) : HbmDoorRedstoneMode.DEFAULT;
         accessLevel = tag.contains("AccessLevel") ? DoorAccessLevel.fromOrdinal(tag.getInt("AccessLevel")) : DoorAccessLevel.DEFAULT;
-        skinReconciled = false;
     }
-
 
     public int getSkinIndex() {
         return skinIndex;
     }
 
     public void setSkinIndex(final int skinIndex) {
-        this.skinIndex = Math.floorMod(skinIndex, 5);
-        skinReconciled = true;
+        this.skinIndex = Math.floorMod(skinIndex, HbmSlidingSealDoorBlockItem.SKIN_COUNT);
         setChanged();
         if (level != null) {
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
         }
     }
 
-    public void setSkinIndexNoBlockUpdate(final int skinIndex) {
-        this.skinIndex = Math.floorMod(skinIndex, 5);
-        skinReconciled = true;
-        setChanged();
-    }
-
     public int cycleSkin() {
-        skinIndex = (skinIndex + 1) % 5;
+        skinIndex = (skinIndex + 1) % HbmSlidingSealDoorBlockItem.SKIN_COUNT;
         setChanged();
         if (level != null) {
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
@@ -135,21 +120,6 @@ public class HbmFireDoorBlockEntity extends BlockEntity implements AccessControl
         }
         return redstoneMode;
     }
-
-
-    private void reconcileSkinOnce(@NotNull final Level level,
-                                   @NotNull final BlockPos pos,
-                                   @NotNull final BlockState state) {
-        if (skinReconciled || level.isClientSide) return;
-        if (!(state.getBlock() instanceof HbmFireDoorBlock)) {
-            skinReconciled = true;
-            return;
-        }
-
-        CustomSkinnedDoorHelper.reconcile(level, pos, state, this);
-        skinReconciled = true;
-    }
-
 
     @Override
     public @NotNull DoorAccessLevel getAccessLevel() {
@@ -208,6 +178,6 @@ public class HbmFireDoorBlockEntity extends BlockEntity implements AccessControl
 
     @Override
     public @NotNull AABB getRenderBoundingBox() {
-        return new AABB(worldPosition.offset(-4, 0, -4), worldPosition.offset(4, 5, 4));
+        return new AABB(worldPosition.offset(-2, 0, -2), worldPosition.offset(3, 3, 3));
     }
 }

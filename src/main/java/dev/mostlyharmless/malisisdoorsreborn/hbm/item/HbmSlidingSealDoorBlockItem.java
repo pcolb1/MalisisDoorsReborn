@@ -3,8 +3,7 @@ package dev.mostlyharmless.malisisdoorsreborn.hbm.item;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmDoorRedstoneMode;
 import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessHelper;
 import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessLevel;
-
-import dev.mostlyharmless.malisisdoorsreborn.hbm.client.render.item.HbmFireDoorItemRenderer;
+import dev.mostlyharmless.malisisdoorsreborn.hbm.client.render.item.HbmSlidingSealDoorItemRenderer;
 import dev.mostlyharmless.malisisdoorsreborn.item.TooltipBlockItem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
@@ -13,9 +12,9 @@ import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -26,24 +25,21 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public class HbmFireDoorBlockItem extends TooltipBlockItem {
+public class HbmSlidingSealDoorBlockItem extends TooltipBlockItem {
 
     public static final String SKIN_TAG = "SkinIndex";
     public static final String REDSTONE_MODE_TAG = "RedstoneMode";
     private static final String SKIN_PREVIEW_CYCLE_TAG = "SkinPreviewCycle";
-    public static final int SKIN_COUNT = 5;
+    public static final int SKIN_COUNT = 2;
 
     private static final String[] SKIN_TRANSLATION_KEYS = {
-            "tooltip.malisisdoorsreborn.hbm_fire_door.skin.default",
-            "tooltip.malisisdoorsreborn.hbm_fire_door.skin.black",
-            "tooltip.malisisdoorsreborn.hbm_fire_door.skin.orange",
-            "tooltip.malisisdoorsreborn.hbm_fire_door.skin.yellow",
-            "tooltip.malisisdoorsreborn.hbm_fire_door.skin.trefoil"
+            "tooltip.malisisdoorsreborn.hbm_sliding_seal_door.skin.default",
+            "tooltip.malisisdoorsreborn.hbm_sliding_seal_door.skin.trefoil"
     };
 
-    public HbmFireDoorBlockItem(final Supplier<? extends Block> block,
-                                final Properties properties,
-                                final String tooltipKey) {
+    public HbmSlidingSealDoorBlockItem(final Supplier<? extends Block> block,
+                                       final Properties properties,
+                                       final String tooltipKey) {
         super(block, properties, tooltipKey);
     }
 
@@ -66,7 +62,7 @@ public class HbmFireDoorBlockItem extends TooltipBlockItem {
 
     public static ItemStack stackWithSkinPreviewCycle(@NotNull final Item item) {
         final ItemStack stack = new ItemStack(item);
-        if (SKIN_COUNT > 1) stack.getOrCreateTag().putBoolean(SKIN_PREVIEW_CYCLE_TAG, true);
+        stack.getOrCreateTag().putBoolean(SKIN_PREVIEW_CYCLE_TAG, true);
         return stack;
     }
 
@@ -143,7 +139,6 @@ public class HbmFireDoorBlockItem extends TooltipBlockItem {
     }
 
 
-
     @Override
     public void inventoryTick(@NotNull final ItemStack stack,
                               @NotNull final Level level,
@@ -174,13 +169,13 @@ public class HbmFireDoorBlockItem extends TooltipBlockItem {
     @Override
     public void initializeClient(@NotNull final Consumer<IClientItemExtensions> consumer) {
         consumer.accept(new IClientItemExtensions() {
-            private HbmFireDoorItemRenderer renderer;
+            private HbmSlidingSealDoorItemRenderer renderer;
 
             @Override
             public @NotNull BlockEntityWithoutLevelRenderer getCustomRenderer() {
                 if (renderer == null) {
                     final Minecraft minecraft = Minecraft.getInstance();
-                    renderer = new HbmFireDoorItemRenderer(
+                    renderer = new HbmSlidingSealDoorItemRenderer(
                             minecraft.getBlockEntityRenderDispatcher(),
                             minecraft.getEntityModels()
                     );

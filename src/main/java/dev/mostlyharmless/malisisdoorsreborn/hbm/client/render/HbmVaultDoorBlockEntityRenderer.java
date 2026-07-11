@@ -3,8 +3,8 @@ package dev.mostlyharmless.malisisdoorsreborn.hbm.client.render;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
-import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmFireDoorBlock;
-import dev.mostlyharmless.malisisdoorsreborn.hbm.blockentity.HbmFireDoorBlockEntity;
+import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmVaultDoorBlock;
+import dev.mostlyharmless.malisisdoorsreborn.hbm.blockentity.HbmVaultDoorBlockEntity;
 import dev.mostlyharmless.malisisdoorsreborn.client.render.door.CustomDoorBreakingOverlay;
 import dev.mostlyharmless.malisisdoorsreborn.core.MdrDefaults;
 import net.minecraft.client.Minecraft;
@@ -28,23 +28,38 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public class HbmFireDoorBlockEntityRenderer implements BlockEntityRenderer<HbmFireDoorBlockEntity> {
+public class HbmVaultDoorBlockEntityRenderer implements BlockEntityRenderer<HbmVaultDoorBlockEntity> {
 
-    private static final ResourceLocation[] TEXTURES = {
-            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/fire_door.png"),
-            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/fire_door_black.png"),
-            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/fire_door_orange.png"),
-            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/fire_door_yellow.png"),
-            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/fire_door_trefoil.png")
+    private static final ResourceLocation[] DOOR_TEXTURES = {
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vault/vault_door_3.png"),
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vault/vault_door_3.png"),
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vault/vault_door_3.png"),
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vault/vault_door_4.png"),
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vault/vault_door_4.png"),
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vault/vault_door_s.png"),
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vault/vault_door_s.png")
     };
-    private static final ObjModel MODEL = ObjModel.load("assets/malisisdoorsreborn/models/pheodoors/fire_door.obj");
-    private static final float MAX_RAISE = 2.75F;
-    private static final float MODEL_TOP_Y = 3.0F;
-    private static final float FRAME_CLIP_MAX_Y = 2.99F;
-    private static final float MODEL_EPSILON = 0.0001F;
+    private static final ResourceLocation[] LABEL_TEXTURES = {
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vault/label_101.png"),
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vault/label_87.png"),
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vault/label_106.png"),
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vault/label_81.png"),
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vault/label_111.png"),
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vault/label_2.png"),
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vault/label_99.png")
+    };
+    private static final ObjModel MODEL = ObjModel.load("assets/malisisdoorsreborn/models/pheodoors/vault_door.obj");
+    private static final float MAX_SLIDE = 5.0F;
+    private static final float MAX_PULL = 1.0F;
+    private static final float DIAMETER = 4.25F;
+    private static final float ITEM_DOOR_CENTER_X = -0.03125F;
+    private static final float ITEM_DOOR_CENTER_Y = 2.5219955F;
+    private static final float ITEM_DOOR_CENTER_Z = 0.0F;
+    private static final float ITEM_DOOR_HEIGHT = 4.250569F;
+    private static final float ITEM_BASE_SCALE = 1.0F / ITEM_DOOR_HEIGHT;
 
     @SuppressWarnings("unused")
-    public HbmFireDoorBlockEntityRenderer(final BlockEntityRendererProvider.Context context) {}
+    public HbmVaultDoorBlockEntityRenderer(final BlockEntityRendererProvider.Context context) {}
 
     @Override
     public int getViewDistance() {
@@ -52,31 +67,31 @@ public class HbmFireDoorBlockEntityRenderer implements BlockEntityRenderer<HbmFi
     }
 
     @Override
-    public void render(@NotNull final HbmFireDoorBlockEntity be,
+    public void render(@NotNull final HbmVaultDoorBlockEntity be,
                        final float partialTick,
                        @NotNull final PoseStack poseStack,
                        @NotNull final MultiBufferSource buffer,
                        final int packedLight,
                        final int packedOverlay) {
         final BlockState state = be.getBlockState();
-        if (!(state.getBlock() instanceof HbmFireDoorBlock)) return;
-        if (state.getValue(HbmFireDoorBlock.PART) != HbmFireDoorBlock.HbmFireDoorPart.ROOT) return;
+        if (!(state.getBlock() instanceof HbmVaultDoorBlock)) return;
+        if (state.getValue(HbmVaultDoorBlock.PART) != HbmVaultDoorBlock.HbmVaultDoorPart.ROOT) return;
 
-        final Direction facing = state.getValue(HbmFireDoorBlock.FACING);
-        final float raise = Math.max(0.0F, Math.min(MAX_RAISE, be.getProgress(partialTick) * MAX_RAISE));
+        final Direction facing = state.getValue(HbmVaultDoorBlock.FACING);
+        final float progress = Math.max(0.0F, Math.min(1.0F, be.getProgress(partialTick)));
         final Minecraft minecraft = Minecraft.getInstance();
         if (CustomDoorBreakingOverlay.shouldRenderNormalDuringVanillaBreakingPass(minecraft, buffer, be.getBlockPos())) {
-            renderModel(poseStack, minecraft.renderBuffers().bufferSource(), packedLight, packedOverlay, facing, raise, skinIndexForRender(state, be));
+            renderModel(poseStack, minecraft.renderBuffers().bufferSource(), packedLight, packedOverlay, facing, progress, skinIndexForRender(state, be));
             return;
         }
-        renderModel(poseStack, buffer, packedLight, packedOverlay, facing, raise, skinIndexForRender(state, be));
+        renderModel(poseStack, buffer, packedLight, packedOverlay, facing, progress, skinIndexForRender(state, be));
     }
 
 
-    private static int skinIndexForRender(@NotNull final BlockState state, @NotNull final HbmFireDoorBlockEntity be) {
+    private static int skinIndexForRender(@NotNull final BlockState state, @NotNull final HbmVaultDoorBlockEntity be) {
         final int entitySkin = be.getSkinIndex();
-        if (!state.hasProperty(HbmFireDoorBlock.SKIN)) return entitySkin;
-        final int stateSkin = state.getValue(HbmFireDoorBlock.SKIN);
+        if (!state.hasProperty(HbmVaultDoorBlock.SKIN)) return entitySkin;
+        final int stateSkin = state.getValue(HbmVaultDoorBlock.SKIN);
         return stateSkin != 0 || entitySkin == 0 ? stateSkin : entitySkin;
     }
 
@@ -85,12 +100,25 @@ public class HbmFireDoorBlockEntityRenderer implements BlockEntityRenderer<HbmFi
                                   final int packedLight,
                                   final int packedOverlay,
                                   final int skinIndex) {
+        final int normalisedSkin = Math.floorMod(skinIndex, DOOR_TEXTURES.length);
+
         poseStack.pushPose();
-        poseStack.translate(0.5F, 0.0F, 0.5F);
-        poseStack.scale(0.31F, 0.31F, 0.31F);
-        poseStack.translate(-1.5F, 0.0F, -0.5F);
-        renderModel(poseStack, buffer, packedLight, packedOverlay, Direction.SOUTH, 0.0F, skinIndex);
+        applyItemBaseTransform(poseStack);
+
+        final VertexConsumer doorConsumer = buffer.getBuffer(RenderType.entityCutout(DOOR_TEXTURES[normalisedSkin]));
+        MODEL.door.render(poseStack.last(), doorConsumer, packedLight, packedOverlay);
+
+        final VertexConsumer labelConsumer = buffer.getBuffer(RenderType.entityCutout(LABEL_TEXTURES[normalisedSkin]));
+        MODEL.label.render(poseStack.last(), labelConsumer, packedLight, packedOverlay);
         poseStack.popPose();
+    }
+
+
+    private static void applyItemBaseTransform(@NotNull final PoseStack poseStack) {
+        poseStack.translate(0.5F, 0.5F, 0.5F);
+        poseStack.scale(ITEM_BASE_SCALE, ITEM_BASE_SCALE, ITEM_BASE_SCALE);
+        poseStack.mulPose(Axis.YP.rotationDegrees(-90.0F));
+        poseStack.translate(-ITEM_DOOR_CENTER_X, -ITEM_DOOR_CENTER_Y, -ITEM_DOOR_CENTER_Z);
     }
 
     private static void renderModel(@NotNull final PoseStack poseStack,
@@ -98,37 +126,52 @@ public class HbmFireDoorBlockEntityRenderer implements BlockEntityRenderer<HbmFi
                                     final int packedLight,
                                     final int packedOverlay,
                                     @NotNull final Direction facing,
-                                    final float raise,
+                                    final float progress,
                                     final int skinIndex) {
-        final ResourceLocation texture = TEXTURES[Math.floorMod(skinIndex, TEXTURES.length)];
-        final VertexConsumer vertexConsumer = buffer.getBuffer(RenderType.entityCutoutNoCull(texture));
-
+        final int normalisedSkin = Math.floorMod(skinIndex, DOOR_TEXTURES.length);
         poseStack.pushPose();
         poseStack.translate(0.5F, 0.0F, 0.5F);
         poseStack.mulPose(Axis.YP.rotationDegrees(yawFor(facing)));
 
-        // Literal RenderFireDoor contract after RenderDoorGeneric has translated and rotated the root.
-        poseStack.mulPose(Axis.YP.rotationDegrees(90.0F));
-        poseStack.translate(-0.5F, 0.0F, 0.0F);
+        final VertexConsumer doorConsumer = buffer.getBuffer(RenderType.entityCutout(DOOR_TEXTURES[normalisedSkin]));
+        MODEL.frame.render(poseStack.last(), doorConsumer, packedLight, packedOverlay);
 
-        MODEL.frame.render(poseStack.last(), vertexConsumer, packedLight, packedOverlay);
+        final float pull = pullFor(progress) * MAX_PULL;
+        final float slide = slideFor(progress) * MAX_SLIDE;
+        final float roll = (float) (360.0D * slide / (DIAMETER * Math.PI));
 
-        if (MdrDefaults.FIRE_DOOR_CLIP_TO_FRAME && raise > 0.0F) {
-            MODEL.staticTopCap.render(poseStack.last(), vertexConsumer, packedLight, packedOverlay);
-            MODEL.door.renderClippedMaxY(poseStack.last(), vertexConsumer, packedLight, packedOverlay, raise, FRAME_CLIP_MAX_Y);
-        } else {
-            poseStack.pushPose();
-            poseStack.translate(0.0F, raise, 0.0F);
-            MODEL.door.render(poseStack.last(), vertexConsumer, packedLight, packedOverlay);
-            poseStack.popPose();
-        }
+        poseStack.pushPose();
+        poseStack.translate(-pull, 0.0F, slide);
+        poseStack.translate(0.0F, 2.5F, 0.0F);
+        poseStack.mulPose(Axis.XP.rotationDegrees(roll));
+        poseStack.translate(0.0F, -2.5F, 0.0F);
+        MODEL.door.render(poseStack.last(), doorConsumer, packedLight, packedOverlay);
+
+        final VertexConsumer labelConsumer = buffer.getBuffer(RenderType.entityCutout(LABEL_TEXTURES[normalisedSkin]));
+        MODEL.label.render(poseStack.last(), labelConsumer, packedLight, packedOverlay);
+        poseStack.popPose();
 
         poseStack.popPose();
     }
 
+    private static float pullFor(final float progress) {
+        final float t = Math.max(0.0F, Math.min(1.0F, progress));
+        if (t <= 0.3333F) return sinFull(t / 0.3333F);
+        return 1.0F;
+    }
+
+    private static float sinFull(final float t) {
+        return (float) ((-Math.cos(Math.max(0.0F, Math.min(1.0F, t)) * Math.PI) + 1.0D) / 2.0D);
+    }
+
+    private static float slideFor(final float progress) {
+        final float t = Math.max(0.0F, Math.min(1.0F, progress));
+        if (t <= 0.3333F) return 0.0F;
+        return Math.max(0.0F, Math.min(1.0F, (t - 0.3333F) / 0.6667F));
+    }
+
     private static float yawFor(final Direction facing) {
-        // HBM RenderDoorGeneric rotation before RenderFireDoor's own fixed +90° rotation:
-        // meta SOUTH -> 270°, EAST -> 0°, NORTH -> 90°, WEST -> 180°.
+        // HBM RenderDoorGeneric orientation: meta SOUTH -> 270°, EAST -> 0°, NORTH -> 90°, WEST -> 180°.
         return switch (facing) {
             case EAST -> 0.0F;
             case NORTH -> 90.0F;
@@ -138,16 +181,17 @@ public class HbmFireDoorBlockEntityRenderer implements BlockEntityRenderer<HbmFi
     }
 
     @SuppressWarnings("SameParameterValue")
-    private record ObjModel(ObjGroup door, ObjGroup frame, ObjGroup staticTopCap) {
+    private record ObjModel(ObjGroup frame, ObjGroup door, ObjGroup label) {
         private static ObjModel load(final String path) {
             final List<float[]> positions = new ArrayList<>();
             final List<float[]> uvs = new ArrayList<>();
             final List<float[]> normals = new ArrayList<>();
-            final List<ObjFace> door = new ArrayList<>();
             final List<ObjFace> frame = new ArrayList<>();
+            final List<ObjFace> door = new ArrayList<>();
+            final List<ObjFace> label = new ArrayList<>();
             List<ObjFace> current = null;
 
-            try (InputStream input = HbmFireDoorBlockEntityRenderer.class.getClassLoader().getResourceAsStream(path)) {
+            try (InputStream input = HbmVaultDoorBlockEntityRenderer.class.getClassLoader().getResourceAsStream(path)) {
                 if (input == null) return new ObjModel(ObjGroup.empty(), ObjGroup.empty(), ObjGroup.empty());
                 try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
                     String line;
@@ -156,7 +200,7 @@ public class HbmFireDoorBlockEntityRenderer implements BlockEntityRenderer<HbmFi
                         if (line.isEmpty() || line.startsWith("#")) continue;
                         final String[] parts = line.split("\\s+");
                         switch (parts[0]) {
-                            case "o", "g" -> current = groupFor(parts.length > 1 ? parts[1] : "", door, frame);
+                            case "o", "g" -> current = groupFor(parts.length > 1 ? parts[1] : "", frame, door, label);
                             case "v" -> positions.add(new float[] {
                                     Float.parseFloat(parts[1]),
                                     Float.parseFloat(parts[2]),
@@ -181,19 +225,17 @@ public class HbmFireDoorBlockEntityRenderer implements BlockEntityRenderer<HbmFi
                 return new ObjModel(ObjGroup.empty(), ObjGroup.empty(), ObjGroup.empty());
             }
 
-            final List<ObjFace> staticTopCap = new ArrayList<>();
-            for (ObjFace face : door) {
-                if (face.isHorizontalTopCap(MODEL_TOP_Y)) staticTopCap.add(face);
-            }
-            return new ObjModel(new ObjGroup(door), new ObjGroup(frame), new ObjGroup(staticTopCap));
+            return new ObjModel(new ObjGroup(frame), new ObjGroup(door), new ObjGroup(label));
         }
 
         private static List<ObjFace> groupFor(final String name,
+                                              final List<ObjFace> frame,
                                               final List<ObjFace> door,
-                                              final List<ObjFace> frame) {
+                                              final List<ObjFace> label) {
             return switch (name.toLowerCase(Locale.ROOT)) {
-                case "door" -> door;
                 case "frame" -> frame;
+                case "door" -> door;
+                case "label" -> label;
                 default -> null;
             };
         }
@@ -263,16 +305,6 @@ public class HbmFireDoorBlockEntityRenderer implements BlockEntityRenderer<HbmFi
                             final int packedOverlay) {
             for (ObjFace face : faces) face.render(pose, vertexConsumer, packedLight, packedOverlay);
         }
-
-        @SuppressWarnings("SameParameterValue")
-        private void renderClippedMaxY(final PoseStack.Pose pose,
-                                       final VertexConsumer vertexConsumer,
-                                       final int packedLight,
-                                       final int packedOverlay,
-                                       final float offsetY,
-                                       final float maxY) {
-            for (ObjFace face : faces) face.renderClippedMaxY(pose, vertexConsumer, packedLight, packedOverlay, offsetY, maxY);
-        }
     }
 
     private record ObjFace(ObjVertex[] vertices) {
@@ -288,61 +320,6 @@ public class HbmFireDoorBlockEntityRenderer implements BlockEntityRenderer<HbmFi
                 return;
             }
             for (ObjVertex vertex : vertices) emit(vertex, pose, vertexConsumer, packedLight, packedOverlay);
-        }
-
-        @SuppressWarnings("SameParameterValue")
-        private boolean isHorizontalTopCap(final float y) {
-            for (ObjVertex vertex : vertices) {
-                if (Math.abs(vertex.y - y) > MODEL_EPSILON) return false;
-                if (vertex.ny < 0.9F) return false;
-            }
-            return true;
-        }
-
-        private void renderClippedMaxY(final PoseStack.Pose pose,
-                                       final VertexConsumer vertexConsumer,
-                                       final int packedLight,
-                                       final int packedOverlay,
-                                       final float offsetY,
-                                       final float maxY) {
-            List<ObjVertex> clipped = new ArrayList<>(vertices.length);
-            for (ObjVertex vertex : vertices) clipped.add(vertex.offsetY(offsetY));
-            clipped = clipMaxY(clipped, maxY);
-            if (clipped.size() < 3) return;
-
-            final ObjVertex first = clipped.get(0);
-            for (int i = 1; i < clipped.size() - 1; i++) {
-                final ObjVertex second = clipped.get(i);
-                final ObjVertex third = clipped.get(i + 1);
-                emit(first, pose, vertexConsumer, packedLight, packedOverlay);
-                emit(second, pose, vertexConsumer, packedLight, packedOverlay);
-                emit(third, pose, vertexConsumer, packedLight, packedOverlay);
-                emit(third, pose, vertexConsumer, packedLight, packedOverlay);
-            }
-        }
-
-        private static List<ObjVertex> clipMaxY(final List<ObjVertex> input, final float maxY) {
-            if (input.isEmpty()) return input;
-
-            final List<ObjVertex> output = new ArrayList<>(input.size() + 1);
-            ObjVertex previous = input.get(input.size() - 1);
-            boolean previousInside = previous.y <= maxY;
-
-            for (ObjVertex current : input) {
-                final boolean currentInside = current.y <= maxY;
-                if (currentInside != previousInside) output.add(intersectY(previous, current, maxY));
-                if (currentInside) output.add(current);
-                previous = current;
-                previousInside = currentInside;
-            }
-
-            return output;
-        }
-
-        private static ObjVertex intersectY(final ObjVertex start, final ObjVertex end, final float y) {
-            final float denominator = end.y - start.y;
-            final float t = denominator == 0.0F ? 0.0F : (y - start.y) / denominator;
-            return start.lerp(end, Math.max(0.0F, Math.min(1.0F, t)));
         }
 
         private static void emit(final ObjVertex vertex,
@@ -362,22 +339,5 @@ public class HbmFireDoorBlockEntityRenderer implements BlockEntityRenderer<HbmFi
         }
     }
 
-    private record ObjVertex(float x, float y, float z, float u, float v, float nx, float ny, float nz) {
-        private ObjVertex offsetY(final float offset) {
-            return new ObjVertex(x, y + offset, z, u, v, nx, ny, nz);
-        }
-
-        private ObjVertex lerp(final ObjVertex other, final float t) {
-            return new ObjVertex(
-                    x + (other.x - x) * t,
-                    y + (other.y - y) * t,
-                    z + (other.z - z) * t,
-                    u + (other.u - u) * t,
-                    v + (other.v - v) * t,
-                    nx + (other.nx - nx) * t,
-                    ny + (other.ny - ny) * t,
-                    nz + (other.nz - nz) * t
-            );
-        }
-    }
+    private record ObjVertex(float x, float y, float z, float u, float v, float nx, float ny, float nz) {}
 }

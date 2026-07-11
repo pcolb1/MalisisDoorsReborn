@@ -2,6 +2,8 @@ package dev.mostlyharmless.malisisdoorsreborn.hbm.blockentity;
 
 import dev.mostlyharmless.malisisdoorsreborn.block.CustomSkinnedDoorHelper;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmDoorRedstoneMode;
+import dev.mostlyharmless.malisisdoorsreborn.access.AccessControlledDoor;
+import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessLevel;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmVehicleDoorBlock;
 import dev.mostlyharmless.malisisdoorsreborn.registry.MdrBlockEntities;
 import dev.mostlyharmless.malisisdoorsreborn.network.MdrNetwork;
@@ -20,7 +22,7 @@ import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public class HbmVehicleDoorBlockEntity extends BlockEntity {
+public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessControlledDoor {
 
     private static final int OPENING_TIME = 60;
 
@@ -28,6 +30,7 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity {
     private float progress = 0.0F;
     private int skinIndex = 0;
     private HbmDoorRedstoneMode redstoneMode = HbmDoorRedstoneMode.DEFAULT;
+    private DoorAccessLevel accessLevel = DoorAccessLevel.DEFAULT;
     private boolean skinReconciled = false;
 
     public HbmVehicleDoorBlockEntity(final BlockPos pos, final BlockState state) {
@@ -79,6 +82,7 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity {
     private void loadShared(@NotNull final CompoundTag tag) {
         skinIndex = Math.floorMod(tag.getInt("SkinIndex"), 1);
         redstoneMode = tag.contains("RedstoneMode") ? HbmDoorRedstoneMode.fromOrdinal(tag.getInt("RedstoneMode")) : HbmDoorRedstoneMode.DEFAULT;
+        accessLevel = tag.contains("AccessLevel") ? DoorAccessLevel.fromOrdinal(tag.getInt("AccessLevel")) : DoorAccessLevel.DEFAULT;
         skinReconciled = false;
     }
 
@@ -148,10 +152,35 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity {
 
 
     @Override
+    public @NotNull DoorAccessLevel getAccessLevel() {
+        return accessLevel;
+    }
+
+    @Override
+    public void setAccessLevel(@NotNull final DoorAccessLevel accessLevel) {
+        this.accessLevel = accessLevel;
+        setChanged();
+        if (level != null) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
+        }
+    }
+
+    @Override
+    public @NotNull DoorAccessLevel cycleAccessLevel() {
+        accessLevel = accessLevel.next();
+        setChanged();
+        if (level != null) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
+        }
+        return accessLevel;
+    }
+
+    @Override
     protected void saveAdditional(@NotNull final CompoundTag tag) {
         super.saveAdditional(tag);
         tag.putInt("SkinIndex", skinIndex);
         tag.putInt("RedstoneMode", redstoneMode.ordinal());
+        tag.putInt("AccessLevel", accessLevel.ordinal());
     }
 
     @Override
