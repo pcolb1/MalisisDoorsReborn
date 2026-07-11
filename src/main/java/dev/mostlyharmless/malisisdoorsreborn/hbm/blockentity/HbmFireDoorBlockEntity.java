@@ -2,6 +2,8 @@ package dev.mostlyharmless.malisisdoorsreborn.hbm.blockentity;
 
 import dev.mostlyharmless.malisisdoorsreborn.block.CustomSkinnedDoorHelper;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmDoorRedstoneMode;
+import dev.mostlyharmless.malisisdoorsreborn.access.AccessControlledDoor;
+import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessLevel;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmFireDoorBlock;
 import dev.mostlyharmless.malisisdoorsreborn.registry.MdrBlockEntities;
 import dev.mostlyharmless.malisisdoorsreborn.network.MdrNetwork;
@@ -20,7 +22,7 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public class HbmFireDoorBlockEntity extends BlockEntity {
+public class HbmFireDoorBlockEntity extends BlockEntity implements AccessControlledDoor {
 
     private static final int OPENING_TIME = 160;
 
@@ -28,6 +30,7 @@ public class HbmFireDoorBlockEntity extends BlockEntity {
     private float progress = 0.0F;
     private int skinIndex = 0;
     private HbmDoorRedstoneMode redstoneMode = HbmDoorRedstoneMode.DEFAULT;
+    private DoorAccessLevel accessLevel = DoorAccessLevel.DEFAULT;
     private boolean skinReconciled = false;
 
     public HbmFireDoorBlockEntity(final BlockPos pos, final BlockState state) {
@@ -79,6 +82,7 @@ public class HbmFireDoorBlockEntity extends BlockEntity {
     private void loadShared(@NotNull final CompoundTag tag) {
         skinIndex = Math.floorMod(tag.getInt("SkinIndex"), 5);
         redstoneMode = HbmDoorRedstoneMode.fromOrdinal(tag.getInt("RedstoneMode"));
+        accessLevel = tag.contains("AccessLevel") ? DoorAccessLevel.fromOrdinal(tag.getInt("AccessLevel")) : DoorAccessLevel.DEFAULT;
         skinReconciled = false;
     }
 
@@ -132,6 +136,30 @@ public class HbmFireDoorBlockEntity extends BlockEntity {
         return redstoneMode;
     }
 
+    @Override
+    public @NotNull DoorAccessLevel getAccessLevel() {
+        return accessLevel;
+    }
+
+    @Override
+    public void setAccessLevel(@NotNull final DoorAccessLevel accessLevel) {
+        this.accessLevel = accessLevel;
+        setChanged();
+        if (level != null) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
+        }
+    }
+
+    @Override
+    public @NotNull DoorAccessLevel cycleAccessLevel() {
+        accessLevel = accessLevel.next();
+        setChanged();
+        if (level != null) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
+        }
+        return accessLevel;
+    }
+
 
     private void reconcileSkinOnce(@NotNull final Level level,
                                    @NotNull final BlockPos pos,
@@ -152,6 +180,7 @@ public class HbmFireDoorBlockEntity extends BlockEntity {
         super.saveAdditional(tag, registries);
         tag.putInt("SkinIndex", skinIndex);
         tag.putInt("RedstoneMode", redstoneMode.ordinal());
+        tag.putInt("AccessLevel", accessLevel.ordinal());
     }
 
     @Override

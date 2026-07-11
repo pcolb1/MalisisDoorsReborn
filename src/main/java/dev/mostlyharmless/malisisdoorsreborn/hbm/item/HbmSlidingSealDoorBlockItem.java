@@ -3,8 +3,7 @@ package dev.mostlyharmless.malisisdoorsreborn.hbm.item;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmDoorRedstoneMode;
 import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessHelper;
 import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessLevel;
-
-import dev.mostlyharmless.malisisdoorsreborn.hbm.client.render.item.HbmVehicleDoorItemRenderer;
+import dev.mostlyharmless.malisisdoorsreborn.hbm.client.render.item.HbmSlidingSealDoorItemRenderer;
 import dev.mostlyharmless.malisisdoorsreborn.item.TooltipBlockItem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
@@ -14,9 +13,9 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.item.component.CustomData;
@@ -28,20 +27,21 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public class HbmVehicleDoorBlockItem extends TooltipBlockItem {
+public class HbmSlidingSealDoorBlockItem extends TooltipBlockItem {
 
     public static final String SKIN_TAG = "SkinIndex";
     public static final String REDSTONE_MODE_TAG = "RedstoneMode";
     private static final String SKIN_PREVIEW_CYCLE_TAG = "SkinPreviewCycle";
-    public static final int SKIN_COUNT = 1;
+    public static final int SKIN_COUNT = 2;
 
     private static final String[] SKIN_TRANSLATION_KEYS = {
-            "tooltip.malisisdoorsreborn.hbm_vehicle_door.skin.default"
+            "tooltip.malisisdoorsreborn.hbm_sliding_seal_door.skin.default",
+            "tooltip.malisisdoorsreborn.hbm_sliding_seal_door.skin.trefoil"
     };
 
-    public HbmVehicleDoorBlockItem(final Supplier<? extends Block> block,
-                                final Properties properties,
-                                final String tooltipKey) {
+    public HbmSlidingSealDoorBlockItem(final Supplier<? extends Block> block,
+                                       final Properties properties,
+                                       final String tooltipKey) {
         super(block, properties, tooltipKey);
     }
 
@@ -193,17 +193,18 @@ public class HbmVehicleDoorBlockItem extends TooltipBlockItem {
         tooltip.add(redstoneTooltip);
         tooltip.add(Component.translatable("tooltip.malisisdoorsreborn.label.access", accessLevelName(accessLevel)).withStyle(ChatFormatting.WHITE));
     }
-@SuppressWarnings("removal")
+
+    @SuppressWarnings("removal")
     @Override
     public void initializeClient(@NotNull final Consumer<IClientItemExtensions> consumer) {
         consumer.accept(new IClientItemExtensions() {
-            private HbmVehicleDoorItemRenderer renderer;
+            private HbmSlidingSealDoorItemRenderer renderer;
 
             @Override
             public @NotNull BlockEntityWithoutLevelRenderer getCustomRenderer() {
                 if (renderer == null) {
                     final Minecraft minecraft = Minecraft.getInstance();
-                    renderer = new HbmVehicleDoorItemRenderer(
+                    renderer = new HbmSlidingSealDoorItemRenderer(
                             minecraft.getBlockEntityRenderDispatcher(),
                             minecraft.getEntityModels()
                     );
