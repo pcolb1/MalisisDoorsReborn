@@ -4,16 +4,17 @@ import dev.mostlyharmless.malisisdoorsreborn.access.AccessControlledDoor;
 import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessLevel;
 import dev.mostlyharmless.malisisdoorsreborn.block.CustomSkinnedDoorHelper;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmDoorRedstoneMode;
-import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmVehicleDoorBlock;
+import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmVaultDoorBlock;
+import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmVaultDoorBlockItem;
 import dev.mostlyharmless.malisisdoorsreborn.registry.MdrBlockEntities;
-import dev.mostlyharmless.malisisdoorsreborn.network.MdrNetwork;
+import dev.mostlyharmless.malisisdoorsreborn.registry.MdrSounds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
-import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -25,9 +26,9 @@ import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessControlledDoor {
+public class HbmVaultDoorBlockEntity extends BlockEntity implements AccessControlledDoor {
 
-    private static final int OPENING_TIME = 60;
+    private static final int OPENING_TIME = 120;
 
     public enum DoorPhase {
         CLOSED,
@@ -44,8 +45,8 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
     private DoorAccessLevel accessLevel = DoorAccessLevel.DEFAULT;
     private boolean skinReconciled = false;
 
-    public HbmVehicleDoorBlockEntity(final BlockPos pos, final BlockState state) {
-        super(MdrBlockEntities.HBM_VEHICLE_DOOR.get(), pos, state);
+    public HbmVaultDoorBlockEntity(final BlockPos pos, final BlockState state) {
+        super(MdrBlockEntities.HBM_VAULT_DOOR.get(), pos, state);
         snapProgressToState(state);
     }
 
@@ -53,14 +54,14 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
     public static void tickClient(@NotNull final Level level,
                                   @NotNull final BlockPos pos,
                                   @NotNull final BlockState state,
-                                  @NotNull final HbmVehicleDoorBlockEntity be) {
+                                  @NotNull final HbmVaultDoorBlockEntity be) {
         be.tickProgress(level, pos, state);
     }
 
     public static void tickServer(@NotNull final Level level,
                                   @NotNull final BlockPos pos,
                                   @NotNull final BlockState state,
-                                  @NotNull final HbmVehicleDoorBlockEntity be) {
+                                  @NotNull final HbmVaultDoorBlockEntity be) {
         be.reconcileSkinOnce(level, pos, state);
         be.tickProgress(level, pos, state);
     }
@@ -71,41 +72,68 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
         previousTicks = ticks;
         if (phase == DoorPhase.OPENING) {
             ticks = Math.min(OPENING_TIME, ticks + 1);
+            if (!level.isClientSide()) {
+                playScheduledSounds(level, pos, true, previousTicks, ticks);
+            }
             if (ticks == OPENING_TIME) {
                 phase = DoorPhase.OPENED;
-                if (!level.isClientSide() && state.getBlock() instanceof final HbmVehicleDoorBlock fireDoor) {
-                    fireDoor.setWholeOpen(level, pos, state, true);
-                    if (level instanceof final ServerLevel serverLevel) {
-                        MdrNetwork.sendHbmVehicleDoorSound(serverLevel, pos, false);
-                    }
+                if (!level.isClientSide() && state.getBlock() instanceof final HbmVaultDoorBlock vaultDoor) {
+                    vaultDoor.setWholeOpen(level, pos, state, true);
                 }
             }
             markForSync(level, pos, state);
         } else if (phase == DoorPhase.CLOSING) {
             ticks = Math.max(0, ticks - 1);
+            if (!level.isClientSide()) {
+                playScheduledSounds(level, pos, false, previousTicks, ticks);
+            }
             if (ticks == 0) {
                 phase = DoorPhase.CLOSED;
-                if (!level.isClientSide() && state.getBlock() instanceof final HbmVehicleDoorBlock fireDoor) {
-                    fireDoor.setWholeOpen(level, pos, state, false);
-                    if (level instanceof final ServerLevel serverLevel) {
-                        MdrNetwork.sendHbmVehicleDoorSound(serverLevel, pos, false);
-                    }
+                if (!level.isClientSide() && state.getBlock() instanceof final HbmVaultDoorBlock vaultDoor) {
+                    vaultDoor.setWholeOpen(level, pos, state, false);
                 }
             }
             markForSync(level, pos, state);
         }
     }
 
+    private void playScheduledSounds(@NotNull final Level level,
+                                     @NotNull final BlockPos pos,
+                                     final boolean opening,
+                                     final int previousOpenTick,
+                                     final int currentOpenTick) {
+        for (int tick = 45; tick <= 115; tick += 10) {
+            final boolean crossed = opening
+                    ? crossesUp(previousOpenTick, currentOpenTick, tick)
+                    : crossesDown(previousOpenTick, currentOpenTick, tick);
+            if (crossed) {
+                level.playSound(null, pos, MdrSounds.HBM_VAULT_DOOR_STOP.get(), SoundSource.BLOCKS, 1.0F, 1.0F);
+            }
+        }
+        if (!opening && crossesDown(previousOpenTick, currentOpenTick, 30)) {
+            level.playSound(null, pos, MdrSounds.HBM_VAULT_DOOR_MOVE.get(), SoundSource.BLOCKS, 1.0F, 1.0F);
+        }
+    }
+
+    private static boolean crossesUp(final int previousTick, final int currentTick, final int targetTick) {
+        return previousTick < targetTick && currentTick >= targetTick;
+    }
+
+    private static boolean crossesDown(final int previousTick, final int currentTick, final int targetTick) {
+        return previousTick > targetTick && currentTick <= targetTick;
+    }
+
     public void setOpen(final boolean open) {
         final Level level = getLevel();
         if (level == null) return;
-        final BlockState state = getBlockState();
-        if (!(state.getBlock() instanceof HbmVehicleDoorBlock)) return;
 
         if (open && phase == DoorPhase.CLOSED) {
             ticks = 0;
             previousTicks = 0;
             phase = DoorPhase.OPENING;
+            if (!level.isClientSide()) {
+                level.playSound(null, worldPosition, MdrSounds.HBM_VAULT_DOOR_MOVE.get(), SoundSource.BLOCKS, 1.0F, 1.0F);
+            }
         } else if (!open && phase == DoorPhase.OPENED) {
             ticks = OPENING_TIME;
             previousTicks = OPENING_TIME;
@@ -114,10 +142,7 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
             return;
         }
 
-        if (!level.isClientSide() && level instanceof final ServerLevel serverLevel) {
-            MdrNetwork.sendHbmVehicleDoorSound(serverLevel, worldPosition, true);
-        }
-        markForSync(level, worldPosition, state);
+        markForSync(level, worldPosition, getBlockState());
     }
 
     public boolean isMoving() {
@@ -129,9 +154,8 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
     }
 
     private void snapProgressToState(@NotNull final BlockState state) {
-        final boolean open = state.hasProperty(BlockStateProperties.OPEN) && state.getValue(BlockStateProperties.OPEN);
-        phase = open ? DoorPhase.OPENED : DoorPhase.CLOSED;
-        ticks = open ? OPENING_TIME : 0;
+        phase = phaseFromState(state);
+        ticks = ticksForPhase(phase);
         previousTicks = ticks;
     }
 
@@ -144,21 +168,31 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
         }
     }
 
+    private static DoorPhase phaseFromState(@NotNull final BlockState state) {
+        final boolean open = state.hasProperty(BlockStateProperties.OPEN) && state.getValue(BlockStateProperties.OPEN);
+        return open ? DoorPhase.OPENED : DoorPhase.CLOSED;
+    }
+
+    private static int ticksForPhase(@NotNull final DoorPhase phase) {
+        return switch (phase) {
+            case OPENING, CLOSED -> 0;
+            case OPENED, CLOSING -> OPENING_TIME;
+        };
+    }
+
     private void loadShared(@NotNull final ValueInput input) {
-        skinIndex = 0;
+        skinIndex = Math.floorMod(input.getIntOr("SkinIndex", 0), HbmVaultDoorBlockItem.SKIN_COUNT);
         redstoneMode = HbmDoorRedstoneMode.fromOrdinal(input.getIntOr("RedstoneMode", 0));
         accessLevel = DoorAccessLevel.fromOrdinal(input.getIntOr("AccessLevel", 0));
         skinReconciled = false;
     }
 
-
     public int getSkinIndex() {
         return skinIndex;
     }
 
-    @SuppressWarnings("unused")
     public void setSkinIndex(final int skinIndex) {
-        this.skinIndex = 0;
+        this.skinIndex = Math.floorMod(skinIndex, HbmVaultDoorBlockItem.SKIN_COUNT);
         skinReconciled = true;
         setChanged();
         if (level != null) {
@@ -166,11 +200,19 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
         }
     }
 
-    @SuppressWarnings("unused")
     public void setSkinIndexNoBlockUpdate(final int skinIndex) {
-        this.skinIndex = 0;
+        this.skinIndex = Math.floorMod(skinIndex, HbmVaultDoorBlockItem.SKIN_COUNT);
         skinReconciled = true;
         setChanged();
+    }
+
+    public int cycleSkin() {
+        skinIndex = (skinIndex + 1) % HbmVaultDoorBlockItem.SKIN_COUNT;
+        setChanged();
+        if (level != null) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
+        }
+        return skinIndex;
     }
 
     public HbmDoorRedstoneMode getRedstoneMode() {
@@ -218,21 +260,11 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
         return accessLevel;
     }
 
-    public int cycleSkin() {
-        skinIndex = 0;
-        setChanged();
-        if (level != null) {
-            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
-        }
-        return skinIndex;
-    }
-
-
     private void reconcileSkinOnce(@NotNull final Level level,
                                    @NotNull final BlockPos pos,
                                    @NotNull final BlockState state) {
         if (skinReconciled || level.isClientSide()) return;
-        if (!(state.getBlock() instanceof HbmVehicleDoorBlock)) {
+        if (!(state.getBlock() instanceof HbmVaultDoorBlock)) {
             skinReconciled = true;
             return;
         }
@@ -240,7 +272,6 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
         CustomSkinnedDoorHelper.reconcile(level, pos, state, this);
         skinReconciled = true;
     }
-
 
     @Override
     protected void saveAdditional(@NotNull final ValueOutput output) {
@@ -266,18 +297,6 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
         previousTicks = ticks;
     }
 
-    private static DoorPhase phaseFromState(@NotNull final BlockState state) {
-        final boolean open = state.hasProperty(BlockStateProperties.OPEN) && state.getValue(BlockStateProperties.OPEN);
-        return open ? DoorPhase.OPENED : DoorPhase.CLOSED;
-    }
-
-    private static int ticksForPhase(@NotNull final DoorPhase phase) {
-        return switch (phase) {
-            case OPENING, CLOSED -> 0;
-            case OPENED, CLOSING -> OPENING_TIME;
-        };
-    }
-
     @Override
     public @NotNull CompoundTag getUpdateTag(@NotNull final HolderLookup.Provider registries) {
         return saveWithoutMetadata(registries);
@@ -293,5 +312,4 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
     public @Nullable Packet<ClientGamePacketListener> getUpdatePacket() {
         return ClientboundBlockEntityDataPacket.create(this);
     }
-
 }

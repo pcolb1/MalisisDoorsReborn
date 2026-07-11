@@ -1,5 +1,7 @@
 package dev.mostlyharmless.malisisdoorsreborn.hbm.blockentity;
 
+import dev.mostlyharmless.malisisdoorsreborn.access.AccessControlledDoor;
+import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessLevel;
 import dev.mostlyharmless.malisisdoorsreborn.block.CustomSkinnedDoorHelper;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmDoorRedstoneMode;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmQeContainmentDoorBlock;
@@ -24,7 +26,7 @@ import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public class HbmQeContainmentDoorBlockEntity extends BlockEntity {
+public class HbmQeContainmentDoorBlockEntity extends BlockEntity implements AccessControlledDoor {
 
     private static final int OPENING_TIME = 160;
 
@@ -40,6 +42,7 @@ public class HbmQeContainmentDoorBlockEntity extends BlockEntity {
     private int previousTicks = 0;
     private int skinIndex = 0;
     private HbmDoorRedstoneMode redstoneMode = HbmDoorRedstoneMode.DEFAULT;
+    private DoorAccessLevel accessLevel = DoorAccessLevel.DEFAULT;
     private boolean skinReconciled = false;
 
     public HbmQeContainmentDoorBlockEntity(final BlockPos pos, final BlockState state) {
@@ -145,6 +148,7 @@ public class HbmQeContainmentDoorBlockEntity extends BlockEntity {
     private void loadShared(@NotNull final ValueInput input) {
         skinIndex = Math.floorMod(input.getIntOr("SkinIndex", 0), HbmQeContainmentDoorBlockItem.SKIN_COUNT);
         redstoneMode = HbmDoorRedstoneMode.fromOrdinal(input.getIntOr("RedstoneMode", 0));
+        accessLevel = DoorAccessLevel.fromOrdinal(input.getIntOr("AccessLevel", 0));
         skinReconciled = false;
     }
 
@@ -189,6 +193,30 @@ public class HbmQeContainmentDoorBlockEntity extends BlockEntity {
         return redstoneMode;
     }
 
+    @Override
+    public @NotNull DoorAccessLevel getAccessLevel() {
+        return accessLevel;
+    }
+
+    @Override
+    public void setAccessLevel(@NotNull final DoorAccessLevel accessLevel) {
+        this.accessLevel = accessLevel;
+        setChanged();
+        if (level != null) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
+        }
+    }
+
+    @Override
+    public @NotNull DoorAccessLevel cycleAccessLevel() {
+        accessLevel = accessLevel.next();
+        setChanged();
+        if (level != null) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
+        }
+        return accessLevel;
+    }
+
     public int cycleSkin() {
         skinIndex = (skinIndex + 1) % HbmQeContainmentDoorBlockItem.SKIN_COUNT;
         setChanged();
@@ -218,6 +246,7 @@ public class HbmQeContainmentDoorBlockEntity extends BlockEntity {
         super.saveAdditional(output);
         output.putInt("SkinIndex", skinIndex);
         output.putInt("RedstoneMode", redstoneMode.ordinal());
+        output.putInt("AccessLevel", accessLevel.ordinal());
         output.putInt("Phase", phase.ordinal());
         output.putInt("Ticks", ticks);
     }

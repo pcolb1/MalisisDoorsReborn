@@ -1,5 +1,8 @@
 package dev.mostlyharmless.malisisdoorsreborn.hbm.block;
 
+import dev.mostlyharmless.malisisdoorsreborn.access.AccessCardDoorTarget;
+import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessHelper;
+import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessLevel;
 import dev.mostlyharmless.malisisdoorsreborn.block.CustomDoorBreakTarget;
 import dev.mostlyharmless.malisisdoorsreborn.block.CustomSkinnedDoorTarget;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.blockentity.HbmQeContainmentDoorBlockEntity;
@@ -52,7 +55,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class HbmQeContainmentDoorBlock extends Block implements EntityBlock, CustomDoorBreakTarget, CustomSkinnedDoorTarget, HbmScrewdriverDoorTarget {
+public class HbmQeContainmentDoorBlock extends Block implements EntityBlock, CustomDoorBreakTarget, CustomSkinnedDoorTarget, HbmScrewdriverDoorTarget, AccessCardDoorTarget {
 
     public static final EnumProperty<Direction> FACING = BlockStateProperties.HORIZONTAL_FACING;
     public static final BooleanProperty OPEN = BlockStateProperties.OPEN;
@@ -202,10 +205,12 @@ public class HbmQeContainmentDoorBlock extends Block implements EntityBlock, Cus
         if (!level.isClientSide()) {
             final int skinIndex = HbmQeContainmentDoorBlockItem.skinIndexFromStack(stack);
             final HbmDoorRedstoneMode redstoneMode = HbmQeContainmentDoorBlockItem.redstoneModeFromStack(stack);
+            final DoorAccessLevel accessLevel = HbmQeContainmentDoorBlockItem.accessLevelFromStack(stack);
             placeDoorParts(level, pos, state.getValue(FACING), state.getValue(OPEN), state.getValue(POWERED), skinIndex);
             if (level.getBlockEntity(pos) instanceof final HbmQeContainmentDoorBlockEntity door) {
                 door.setSkinIndex(skinIndex);
                 door.setRedstoneMode(redstoneMode);
+                door.setAccessLevel(accessLevel);
             }
         }
     }
@@ -222,8 +227,42 @@ public class HbmQeContainmentDoorBlock extends Block implements EntityBlock, Cus
         if (root.getBlock() != this) return InteractionResult.PASS;
         if (isDoorMoving(level, rootPos)) return InteractionResult.CONSUME;
 
+        if (level.getBlockEntity(rootPos) instanceof final HbmQeContainmentDoorBlockEntity accessDoor
+                && !DoorAccessHelper.canOpen(player, accessDoor.getAccessLevel())) {
+            DoorAccessHelper.showAccessLevel(player, accessDoor.getAccessLevel());
+            return InteractionResult.CONSUME;
+        }
+
         if (!canManualToggle(level, rootPos)) return InteractionResult.CONSUME;
         setDoorOpen(level, rootPos, !root.getValue(OPEN), player);
+        return InteractionResult.CONSUME;
+    }
+
+
+    @Override
+    public @NotNull InteractionResult applyAccessCard(@NotNull final Level level,
+                                                      @NotNull final BlockPos pos,
+                                                      @NotNull final BlockState state,
+                                                      @NotNull final Player player,
+                                                      @NotNull final ItemStack cardStack) {
+        if (level.isClientSide()) return InteractionResult.SUCCESS;
+
+        final BlockPos rootPos = rootPos(pos, state);
+        final BlockState root = level.getBlockState(rootPos);
+        if (!(root.getBlock() instanceof final HbmQeContainmentDoorBlock doorBlock)) return InteractionResult.PASS;
+        if (isDoorMoving(level, rootPos)) return InteractionResult.CONSUME;
+
+        if (level.getBlockEntity(rootPos) instanceof final HbmQeContainmentDoorBlockEntity accessDoor) {
+            final InteractionResult accessResult = DoorAccessHelper.handleAccessCardUse(level, rootPos, player, accessDoor, cardStack);
+            if (accessResult != InteractionResult.PASS) return accessResult;
+            if (!DoorAccessHelper.canOpen(player, accessDoor.getAccessLevel())) {
+                DoorAccessHelper.showAccessLevel(player, accessDoor.getAccessLevel());
+                return InteractionResult.CONSUME;
+            }
+        }
+
+        if (!doorBlock.canManualToggle(level, rootPos)) return InteractionResult.CONSUME;
+        doorBlock.setDoorOpen(level, rootPos, !root.getValue(OPEN), player);
         return InteractionResult.CONSUME;
     }
 
@@ -253,7 +292,7 @@ public class HbmQeContainmentDoorBlock extends Block implements EntityBlock, Cus
         if (level.getBlockEntity(rootPos) instanceof final HbmQeContainmentDoorBlockEntity door) {
             final int skinIndex = door.cycleSkin();
             updateDoorSkin(level, rootPos, root.getValue(FACING), skinIndex);
-            player.displayClientMessage(Component.literal("Skin: " + HbmQeContainmentDoorBlockItem.skinName(skinIndex)), true);
+            player.displayClientMessage(Component.translatable("tooltip.malisisdoorsreborn.label.skin", HbmQeContainmentDoorBlockItem.skinName(skinIndex)), true);
             playScrewdriverClick(level, rootPos);
             return InteractionResult.CONSUME;
         }
@@ -274,7 +313,7 @@ public class HbmQeContainmentDoorBlock extends Block implements EntityBlock, Cus
 
         if (level.getBlockEntity(rootPos) instanceof final HbmQeContainmentDoorBlockEntity door) {
             final HbmDoorRedstoneMode mode = door.cycleRedstoneMode();
-            player.displayClientMessage(Component.literal("Redstone: " + mode.displayName()), true);
+            player.displayClientMessage(Component.translatable("tooltip.malisisdoorsreborn.label.redstone", mode.displayName()), true);
             playScrewdriverClick(level, rootPos);
             return InteractionResult.CONSUME;
         }
@@ -304,6 +343,7 @@ public class HbmQeContainmentDoorBlock extends Block implements EntityBlock, Cus
         if (powered == wasPowered) return;
 
         if (!(level.getBlockEntity(rootPos) instanceof final HbmQeContainmentDoorBlockEntity door) || door.isMoving()) return;
+        if (door.getAccessLevel() != DoorAccessLevel.DEFAULT) return;
 
         doorBlock.setDoorPowered(level, rootPos, powered);
         doorBlock.applyRedstoneChange(level, rootPos, powered, door.getRedstoneMode());
@@ -341,7 +381,8 @@ public class HbmQeContainmentDoorBlock extends Block implements EntityBlock, Cus
                                                 @NotNull final Player player) {
         final BlockPos rootPos = rootPos(pos, state);
         final HbmDoorRedstoneMode redstoneMode = level.getBlockEntity(rootPos) instanceof final HbmQeContainmentDoorBlockEntity door ? door.getRedstoneMode() : HbmDoorRedstoneMode.DEFAULT;
-        return HbmQeContainmentDoorBlockItem.stackWithSkinAndRedstone(MdrItems.HBM_QE_CONTAINMENT_DOOR.get(), skinIndexAt(level, rootPos), redstoneMode);
+        final DoorAccessLevel accessLevel = level.getBlockEntity(rootPos) instanceof final HbmQeContainmentDoorBlockEntity door ? door.getAccessLevel() : DoorAccessLevel.DEFAULT;
+        return HbmQeContainmentDoorBlockItem.stackWithSkinRedstoneAccess(MdrItems.HBM_QE_CONTAINMENT_DOOR.get(), skinIndexAt(level, rootPos), redstoneMode, accessLevel);
     }
 
     @Override
@@ -353,7 +394,8 @@ public class HbmQeContainmentDoorBlock extends Block implements EntityBlock, Cus
         final int stateSkin = state.hasProperty(SKIN) ? state.getValue(SKIN) : 0;
         final int skinIndex = stateSkin != 0 || entitySkin == 0 ? stateSkin : entitySkin;
         final HbmDoorRedstoneMode redstoneMode = blockEntity instanceof final HbmQeContainmentDoorBlockEntity doorEntity ? doorEntity.getRedstoneMode() : HbmDoorRedstoneMode.DEFAULT;
-        return List.of(HbmQeContainmentDoorBlockItem.stackWithSkinAndRedstone(MdrItems.HBM_QE_CONTAINMENT_DOOR.get(), skinIndex, redstoneMode));
+        final DoorAccessLevel accessLevel = blockEntity instanceof final HbmQeContainmentDoorBlockEntity doorEntity ? doorEntity.getAccessLevel() : DoorAccessLevel.DEFAULT;
+        return List.of(HbmQeContainmentDoorBlockItem.stackWithSkinRedstoneAccess(MdrItems.HBM_QE_CONTAINMENT_DOOR.get(), skinIndex, redstoneMode, accessLevel));
     }
 
     @Override
@@ -518,9 +560,11 @@ public class HbmQeContainmentDoorBlock extends Block implements EntityBlock, Cus
         }
     }
 
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     private boolean canManualToggle(@NotNull final Level level,
                                     @NotNull final BlockPos rootPos) {
         if (level.getBlockEntity(rootPos) instanceof final HbmQeContainmentDoorBlockEntity door) {
+            if (door.getAccessLevel() != DoorAccessLevel.DEFAULT) return true;
             return door.getRedstoneMode() != HbmDoorRedstoneMode.REDSTONE_ONLY;
         }
         return true;
