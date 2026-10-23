@@ -53,6 +53,11 @@ public class HbmQeContainmentDoorBlockEntityRenderer implements BlockEntityRende
     public HbmQeContainmentDoorBlockEntityRenderer(final BlockEntityRendererProvider.Context context) {}
 
     @Override
+    public boolean shouldRenderOffScreen() {
+        return true;
+    }
+
+    @Override
     public int getViewDistance() {
         return MdrDefaults.LARGE_SPECIAL_DOOR_VIEW_DISTANCE;
     }

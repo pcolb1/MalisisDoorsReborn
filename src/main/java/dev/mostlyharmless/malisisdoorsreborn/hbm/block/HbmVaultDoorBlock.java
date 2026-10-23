@@ -1,8 +1,11 @@
 package dev.mostlyharmless.malisisdoorsreborn.hbm.block;
 
+import dev.mostlyharmless.malisisdoorsreborn.common.DoorRedstoneMode;
+
 import dev.mostlyharmless.malisisdoorsreborn.access.AccessCardDoorTarget;
 import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessHelper;
 import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessLevel;
+import dev.mostlyharmless.malisisdoorsreborn.block.AccessCardReaderCardLevelMode;
 import dev.mostlyharmless.malisisdoorsreborn.block.CustomDoorBreakTarget;
 import dev.mostlyharmless.malisisdoorsreborn.block.CustomSkinnedDoorTarget;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.blockentity.HbmVaultDoorBlockEntity;
@@ -13,6 +16,7 @@ import dev.mostlyharmless.malisisdoorsreborn.registry.MdrBlocks;
 import dev.mostlyharmless.malisisdoorsreborn.registry.MdrItems;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.util.RandomSource;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -24,11 +28,13 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.ScheduledTickAccess;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.RenderShape;
+import net.minecraft.world.level.block.SimpleWaterloggedBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -40,6 +46,7 @@ import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.redstone.Orientation;
+import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
@@ -54,11 +61,12 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class HbmVaultDoorBlock extends Block implements EntityBlock, CustomDoorBreakTarget, CustomSkinnedDoorTarget, HbmScrewdriverDoorTarget, AccessCardDoorTarget {
+public class HbmVaultDoorBlock extends Block implements EntityBlock, SimpleWaterloggedBlock, CustomDoorBreakTarget, CustomSkinnedDoorTarget, HbmScrewdriverDoorTarget, AccessCardDoorTarget {
 
     public static final EnumProperty<Direction> FACING = BlockStateProperties.HORIZONTAL_FACING;
     public static final BooleanProperty OPEN = BlockStateProperties.OPEN;
     public static final BooleanProperty POWERED = BlockStateProperties.POWERED;
+    public static final BooleanProperty WATERLOGGED = BlockStateProperties.WATERLOGGED;
     public static final IntegerProperty X_PART = IntegerProperty.create("x", 0, 4);
     public static final IntegerProperty Y_PART = IntegerProperty.create("y", 0, 4);
     public static final IntegerProperty Z_PART = IntegerProperty.create("z", 0, 1);
@@ -80,6 +88,7 @@ public class HbmVaultDoorBlock extends Block implements EntityBlock, CustomDoorB
                 .setValue(FACING, Direction.NORTH)
                 .setValue(OPEN, false)
                 .setValue(POWERED, false)
+                .setValue(WATERLOGGED, false)
                 .setValue(X_PART, ROOT_X_PART)
                 .setValue(Y_PART, ROOT_Y_PART)
                 .setValue(Z_PART, ROOT_Z_PART)
@@ -216,7 +225,7 @@ public class HbmVaultDoorBlock extends Block implements EntityBlock, CustomDoorB
 
     @Override
     protected void createBlockStateDefinition(final StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(FACING, OPEN, POWERED, X_PART, Y_PART, Z_PART, PART, SKIN);
+        builder.add(FACING, OPEN, POWERED, WATERLOGGED, X_PART, Y_PART, Z_PART, PART, SKIN);
     }
 
     @Override
@@ -232,7 +241,30 @@ public class HbmVaultDoorBlock extends Block implements EntityBlock, CustomDoorB
         if (!canPlaceDoor(level, rootPos, facing, context)) return null;
         return defaultBlockState()
                 .setValue(FACING, facing)
+                .setValue(WATERLOGGED, level.getFluidState(rootPos).getType() == Fluids.WATER)
                 .setValue(SKIN, HbmVaultDoorBlockItem.skinIndexFromStack(context.getItemInHand()));
+    }
+
+    @Override
+    protected @NotNull BlockState updateShape(@NotNull final BlockState state,
+                                              @NotNull final LevelReader level,
+                                              @NotNull final ScheduledTickAccess scheduledTickAccess,
+                                              @NotNull final BlockPos pos,
+                                              @NotNull final Direction direction,
+                                              @NotNull final BlockPos neighbourPos,
+                                              @NotNull final BlockState neighbourState,
+                                              @NotNull final RandomSource random) {
+        if (state.getValue(WATERLOGGED)) {
+            scheduledTickAccess.scheduleTick(pos, Fluids.WATER, Fluids.WATER.getTickDelay(level));
+        }
+        return super.updateShape(state, level, scheduledTickAccess, pos, direction, neighbourPos, neighbourState, random);
+    }
+
+    @Override
+    protected @NotNull FluidState getFluidState(@NotNull final BlockState state) {
+        return state.getValue(WATERLOGGED)
+                ? Fluids.WATER.getSource(false)
+                : super.getFluidState(state);
     }
 
     @Override
@@ -243,13 +275,15 @@ public class HbmVaultDoorBlock extends Block implements EntityBlock, CustomDoorB
                             @NotNull final ItemStack stack) {
         if (!level.isClientSide()) {
             final int skinIndex = HbmVaultDoorBlockItem.skinIndexFromStack(stack);
-            final HbmDoorRedstoneMode redstoneMode = HbmVaultDoorBlockItem.redstoneModeFromStack(stack);
+            final DoorRedstoneMode redstoneMode = HbmVaultDoorBlockItem.redstoneModeFromStack(stack);
             final DoorAccessLevel accessLevel = HbmVaultDoorBlockItem.accessLevelFromStack(stack);
+            final AccessCardReaderCardLevelMode cardLevelMode = DoorAccessHelper.cardLevelModeFromStack(stack);
             placeDoorParts(level, pos, state.getValue(FACING), state.getValue(OPEN), state.getValue(POWERED), skinIndex);
             if (level.getBlockEntity(pos) instanceof final HbmVaultDoorBlockEntity door) {
                 door.setSkinIndex(skinIndex);
                 door.setRedstoneMode(redstoneMode);
                 door.setAccessLevel(accessLevel);
+                door.setCardLevelMode(cardLevelMode);
             }
         }
     }
@@ -267,7 +301,7 @@ public class HbmVaultDoorBlock extends Block implements EntityBlock, CustomDoorB
         if (isDoorMoving(level, rootPos)) return InteractionResult.CONSUME;
 
         if (level.getBlockEntity(rootPos) instanceof final HbmVaultDoorBlockEntity accessDoor
-                && !DoorAccessHelper.canOpen(player, accessDoor.getAccessLevel())) {
+                && !DoorAccessHelper.canOpen(player, accessDoor)) {
             DoorAccessHelper.showAccessLevel(player, accessDoor.getAccessLevel());
             return InteractionResult.CONSUME;
         }
@@ -294,7 +328,7 @@ public class HbmVaultDoorBlock extends Block implements EntityBlock, CustomDoorB
         if (level.getBlockEntity(rootPos) instanceof final HbmVaultDoorBlockEntity accessDoor) {
             final InteractionResult accessResult = DoorAccessHelper.handleAccessCardUse(level, rootPos, player, accessDoor, cardStack);
             if (accessResult != InteractionResult.PASS) return accessResult;
-            if (!DoorAccessHelper.canOpen(player, accessDoor.getAccessLevel())) {
+            if (!DoorAccessHelper.canOpen(player, accessDoor)) {
                 DoorAccessHelper.showAccessLevel(player, accessDoor.getAccessLevel());
                 return InteractionResult.CONSUME;
             }
@@ -314,7 +348,28 @@ public class HbmVaultDoorBlock extends Block implements EntityBlock, CustomDoorB
         return switch (mode) {
             case CYCLE_DOOR_SKIN -> cycleSkinWithScrewdriver(level, pos, state, player);
             case CYCLE_REDSTONE_BEHAVIOUR -> cycleRedstoneModeWithScrewdriver(level, pos, state, player);
+            case CYCLE_PULSE_DURATION -> InteractionResult.PASS;
+            case CYCLE_CARD_LEVELS -> cycleCardLevelModeWithScrewdriver(level, pos, state, player);
         };
+    }
+
+    private @NotNull InteractionResult cycleCardLevelModeWithScrewdriver(@NotNull final Level level,
+                                                                         @NotNull final BlockPos pos,
+                                                                         @NotNull final BlockState state,
+                                                                         @NotNull final Player player) {
+        if (level.isClientSide()) return InteractionResult.SUCCESS;
+
+        final BlockPos rootPos = rootPos(pos, state);
+        final BlockState root = level.getBlockState(rootPos);
+        if (root.getBlock() != this) return InteractionResult.PASS;
+        if (isDoorMoving(level, rootPos)) return InteractionResult.CONSUME;
+
+        if (level.getBlockEntity(rootPos) instanceof final HbmVaultDoorBlockEntity door) {
+            DoorAccessHelper.cycleCardLevelMode(level, rootPos, player, door);
+            return InteractionResult.CONSUME;
+        }
+
+        return InteractionResult.PASS;
     }
 
     private @NotNull InteractionResult cycleSkinWithScrewdriver(@NotNull final Level level,
@@ -351,7 +406,7 @@ public class HbmVaultDoorBlock extends Block implements EntityBlock, CustomDoorB
         if (isDoorMoving(level, rootPos)) return InteractionResult.CONSUME;
 
         if (level.getBlockEntity(rootPos) instanceof final HbmVaultDoorBlockEntity door) {
-            final HbmDoorRedstoneMode mode = door.cycleRedstoneMode();
+            final DoorRedstoneMode mode = door.cycleRedstoneMode();
             player.displayClientMessage(Component.translatable("tooltip.malisisdoorsreborn.label.redstone", mode.displayName()), true);
             playScrewdriverClick(level, rootPos);
             return InteractionResult.CONSUME;
@@ -419,9 +474,10 @@ public class HbmVaultDoorBlock extends Block implements EntityBlock, CustomDoorB
                                                 final boolean includeData,
                                                 @NotNull final Player player) {
         final BlockPos rootPos = rootPos(pos, state);
-        final HbmDoorRedstoneMode redstoneMode = level.getBlockEntity(rootPos) instanceof final HbmVaultDoorBlockEntity door ? door.getRedstoneMode() : HbmDoorRedstoneMode.DEFAULT;
+        final DoorRedstoneMode redstoneMode = level.getBlockEntity(rootPos) instanceof final HbmVaultDoorBlockEntity door ? door.getRedstoneMode() : DoorRedstoneMode.DEFAULT;
         final DoorAccessLevel accessLevel = level.getBlockEntity(rootPos) instanceof final HbmVaultDoorBlockEntity door ? door.getAccessLevel() : DoorAccessLevel.DEFAULT;
-        return HbmVaultDoorBlockItem.stackWithSkinRedstoneAccess(MdrItems.HBM_VAULT_DOOR.get(), skinIndexAt(level, rootPos), redstoneMode, accessLevel);
+        final AccessCardReaderCardLevelMode cardLevelMode = level.getBlockEntity(rootPos) instanceof final HbmVaultDoorBlockEntity door ? door.getCardLevelMode() : AccessCardReaderCardLevelMode.defaultValue();
+        return HbmVaultDoorBlockItem.stackWithSkinRedstoneAccess(MdrItems.HBM_VAULT_DOOR.get(), skinIndexAt(level, rootPos), redstoneMode, accessLevel, cardLevelMode);
     }
 
     @Override
@@ -431,9 +487,10 @@ public class HbmVaultDoorBlock extends Block implements EntityBlock, CustomDoorB
         final int entitySkin = blockEntity instanceof final HbmVaultDoorBlockEntity doorEntity ? doorEntity.getSkinIndex() : 0;
         final int stateSkin = state.hasProperty(SKIN) ? state.getValue(SKIN) : 0;
         final int skinIndex = stateSkin != 0 || entitySkin == 0 ? stateSkin : entitySkin;
-        final HbmDoorRedstoneMode redstoneMode = blockEntity instanceof final HbmVaultDoorBlockEntity doorEntity ? doorEntity.getRedstoneMode() : HbmDoorRedstoneMode.DEFAULT;
+        final DoorRedstoneMode redstoneMode = blockEntity instanceof final HbmVaultDoorBlockEntity doorEntity ? doorEntity.getRedstoneMode() : DoorRedstoneMode.DEFAULT;
         final DoorAccessLevel accessLevel = blockEntity instanceof final HbmVaultDoorBlockEntity doorEntity ? doorEntity.getAccessLevel() : DoorAccessLevel.DEFAULT;
-        return List.of(HbmVaultDoorBlockItem.stackWithSkinRedstoneAccess(MdrItems.HBM_VAULT_DOOR.get(), skinIndex, redstoneMode, accessLevel));
+        final AccessCardReaderCardLevelMode cardLevelMode = blockEntity instanceof final HbmVaultDoorBlockEntity doorEntity ? doorEntity.getCardLevelMode() : AccessCardReaderCardLevelMode.defaultValue();
+        return List.of(HbmVaultDoorBlockItem.stackWithSkinRedstoneAccess(MdrItems.HBM_VAULT_DOOR.get(), skinIndex, redstoneMode, accessLevel, cardLevelMode));
     }
 
 
@@ -457,7 +514,14 @@ public class HbmVaultDoorBlock extends Block implements EntityBlock, CustomDoorB
                                                  @NotNull final BlockGetter level,
                                                  @NotNull final BlockPos pos,
                                                  @NotNull final CollisionContext context) {
-        return collisionShapeForPart(state);
+        final BlockPos rootPos = rootPos(pos, state);
+        final Boolean rootOpen = HbmCollisionHelper.rootOpen(level, rootPos, this);
+        if (rootOpen == null) return collisionShapeForPart(state);
+
+        final float progress = level.getBlockEntity(rootPos) instanceof final HbmVaultDoorBlockEntity door
+                ? door.getProgress(1.0F)
+                : rootOpen ? 1.0F : 0.0F;
+        return collisionShapeForPart(state, progress);
     }
 
     private VoxelShape fullDoorShape(final BlockState state) {
@@ -502,10 +566,70 @@ public class HbmVaultDoorBlock extends Block implements EntityBlock, CustomDoorB
     }
 
     private VoxelShape collisionShapeForPart(final BlockState state) {
+        return collisionShapeForPart(state, state.getValue(OPEN) ? 1.0F : 0.0F);
+    }
+
+    private VoxelShape collisionShapeForPart(final BlockState state, final float progress) {
         if (isRearBasePart(state)) return Shapes.block();
         if (!isMainFacePart(state)) return Shapes.empty();
-        if (!state.getValue(OPEN)) return Shapes.block();
-        return isOpenCollisionFramePart(state) ? Shapes.block() : Shapes.empty();
+
+        VoxelShape shape = isOpenCollisionFramePart(state) ? Shapes.block() : Shapes.empty();
+        final int localX = state.getValue(X_PART) - ROOT_X_PART;
+        final double partMin = localX - 0.5D;
+        final double partMax = localX + 0.5D;
+        final double t = Math.max(0.0D, Math.min(1.0D, progress));
+        final double pull = vaultPull(t);
+        final double slide = vaultSlide(t) * 5.0D;
+        final double panelMin = -2.5D + slide;
+        final double panelMax = 2.5D + slide;
+        final double minAcross = Math.max(partMin, panelMin);
+        final double maxAcross = Math.min(partMax, panelMax);
+        if (minAcross < maxAcross) {
+            shape = Shapes.or(shape, orientedPanelShape(
+                    state, localX, minAcross, maxAcross,
+                    -0.5D - pull, 0.5D - pull
+            ));
+        }
+        return shape;
+    }
+
+    private static double vaultPull(final double progress) {
+        if (progress <= 0.3333D) {
+            final double t = Math.max(0.0D, Math.min(1.0D, progress / 0.3333D));
+            return (-Math.cos(t * Math.PI) + 1.0D) * 0.5D;
+        }
+        return 1.0D;
+    }
+
+    private static double vaultSlide(final double progress) {
+        if (progress <= 0.3333D) return 0.0D;
+        return Math.max(0.0D, Math.min(1.0D, (progress - 0.3333D) / 0.6667D));
+    }
+
+    private static VoxelShape orientedPanelShape(@NotNull final BlockState state,
+                                                  final int localX,
+                                                  final double minAcross,
+                                                  final double maxAcross,
+                                                  final double minDepth,
+                                                  final double maxDepth) {
+        final Direction facing = state.getValue(FACING);
+        final Direction across = facing.getCounterClockWise();
+        double minX = Double.POSITIVE_INFINITY;
+        double minZ = Double.POSITIVE_INFINITY;
+        double maxX = Double.NEGATIVE_INFINITY;
+        double maxZ = Double.NEGATIVE_INFINITY;
+
+        for (double a : new double[] {minAcross, maxAcross}) {
+            for (double d : new double[] {minDepth, maxDepth}) {
+                final double x = 0.5D + across.getStepX() * (a - localX) + facing.getStepX() * d;
+                final double z = 0.5D + across.getStepZ() * (a - localX) + facing.getStepZ() * d;
+                minX = Math.min(minX, x);
+                minZ = Math.min(minZ, z);
+                maxX = Math.max(maxX, x);
+                maxZ = Math.max(maxZ, z);
+            }
+        }
+        return Shapes.box(minX, 0.0D, minZ, maxX, 1.0D, maxZ);
     }
 
     private static boolean isMainFacePart(final BlockState state) {
@@ -546,7 +670,9 @@ public class HbmVaultDoorBlock extends Block implements EntityBlock, CustomDoorB
         for (DoorPartCoord coord : doorPartCoords()) {
             final BlockPos partPos = partPos(rootPos, facing, coord.x, coord.y, coord.z);
             final BlockState existing = level.getBlockState(partPos);
-            if (!existing.canBeReplaced(context)) return false;
+            final FluidState fluid = level.getFluidState(partPos);
+            if (!existing.canBeReplaced(context)
+                    || (fluid.getType() != Fluids.EMPTY && fluid.getType() != Fluids.WATER)) return false;
         }
         return true;
     }
@@ -564,7 +690,10 @@ public class HbmVaultDoorBlock extends Block implements EntityBlock, CustomDoorB
                 .setValue(SKIN, Math.floorMod(skinIndex, HbmVaultDoorBlockItem.SKIN_COUNT));
         for (DoorPartCoord coord : doorPartCoords()) {
             final HbmVaultDoorPart part = coord.x == ROOT_X_PART && coord.y == ROOT_Y_PART && coord.z == ROOT_Z_PART ? HbmVaultDoorPart.ROOT : HbmVaultDoorPart.PART;
-            level.setBlock(partPos(rootPos, facing, coord.x, coord.y, coord.z), base
+            final BlockPos partPos = partPos(rootPos, facing, coord.x, coord.y, coord.z);
+            final boolean waterlogged = level.getFluidState(partPos).getType() == Fluids.WATER;
+            level.setBlock(partPos, base
+                    .setValue(WATERLOGGED, waterlogged)
                     .setValue(X_PART, coord.x)
                     .setValue(Y_PART, coord.y)
                     .setValue(Z_PART, coord.z)
@@ -577,7 +706,13 @@ public class HbmVaultDoorBlock extends Block implements EntityBlock, CustomDoorB
             final BlockPos partPos = partPos(rootPos, facing, coord.x, coord.y, coord.z);
             final BlockState state = level.getBlockState(partPos);
             if (state.getBlock() == this) {
-                level.setBlock(partPos, Fluids.EMPTY.defaultFluidState().createLegacyBlock(), Block.UPDATE_ALL);
+                level.setBlock(
+                        partPos,
+                        state.getValue(WATERLOGGED)
+                                ? Fluids.WATER.defaultFluidState().createLegacyBlock()
+                                : Fluids.EMPTY.defaultFluidState().createLegacyBlock(),
+                        Block.UPDATE_ALL
+                );
             }
         }
     }
@@ -596,7 +731,7 @@ public class HbmVaultDoorBlock extends Block implements EntityBlock, CustomDoorB
     private boolean canManualToggle(@NotNull final Level level, @NotNull final BlockPos rootPos) {
         if (level.getBlockEntity(rootPos) instanceof final HbmVaultDoorBlockEntity door) {
             if (door.getAccessLevel() != DoorAccessLevel.DEFAULT) return true;
-            return door.getRedstoneMode() != HbmDoorRedstoneMode.REDSTONE_ONLY;
+            return door.getRedstoneMode() != DoorRedstoneMode.REDSTONE_ONLY;
         }
         return true;
     }
@@ -604,7 +739,7 @@ public class HbmVaultDoorBlock extends Block implements EntityBlock, CustomDoorB
     private void applyRedstoneChange(@NotNull final Level level,
                                      @NotNull final BlockPos rootPos,
                                      final boolean powered,
-                                     @NotNull final HbmDoorRedstoneMode mode) {
+                                     @NotNull final DoorRedstoneMode mode) {
         switch (mode) {
             case DEFAULT, REDSTONE_ONLY -> setDoorOpen(level, rootPos, powered, null);
             case ALWAYS_IGNORE -> {}
