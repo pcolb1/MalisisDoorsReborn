@@ -164,8 +164,8 @@ public class HbmFireDoorBlockEntityRenderer implements BlockEntityRenderer<HbmFi
 
     private static void applyHbmTransform(@NotNull final PoseStack poseStack, @NotNull final Direction facing) {
         poseStack.translate(0.5F, 0.0F, 0.5F);
-        poseStack.mulPose(Axis.YP.rotationDegrees(yawFor(facing)));
-        poseStack.mulPose(Axis.YP.rotationDegrees(90.0F));
+        poseStack.rotateDegrees(Axis.YP, yawFor(facing));
+        poseStack.rotateDegrees(Axis.YP, 90.0F);
         poseStack.translate(-0.5F, 0.0F, 0.0F);
     }
 

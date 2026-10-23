@@ -154,7 +154,7 @@ public class HbmVaultDoorBlockEntityRenderer implements BlockEntityRenderer<HbmV
     private static void applyItemBaseTransform(@NotNull final PoseStack poseStack) {
         poseStack.translate(0.5F, 0.5F, 0.5F);
         poseStack.scale(ITEM_BASE_SCALE, ITEM_BASE_SCALE, ITEM_BASE_SCALE);
-        poseStack.mulPose(Axis.YP.rotationDegrees(-90.0F));
+        poseStack.rotateDegrees(Axis.YP, -90.0F);
         poseStack.translate(-ITEM_DOOR_CENTER_X, -ITEM_DOOR_CENTER_Y, -ITEM_DOOR_CENTER_Z);
     }
 
@@ -172,7 +172,7 @@ public class HbmVaultDoorBlockEntityRenderer implements BlockEntityRenderer<HbmV
 
         poseStack.pushPose();
         poseStack.translate(0.5F, 0.0F, 0.5F);
-        poseStack.mulPose(Axis.YP.rotationDegrees(yawFor(facing)));
+        poseStack.rotateDegrees(Axis.YP, yawFor(facing));
 
         collector.submitCustomGeometry(poseStack, RenderTypes.cutoutMovingBlock(), (pose, vertexConsumer) ->
                 MODEL.frame.render(pose, vertexConsumer, doorSprite, packedLight, packedOverlay));
@@ -184,7 +184,7 @@ public class HbmVaultDoorBlockEntityRenderer implements BlockEntityRenderer<HbmV
         poseStack.pushPose();
         poseStack.translate(-pull, 0.0F, slide);
         poseStack.translate(0.0F, 2.5F, 0.0F);
-        poseStack.mulPose(Axis.XP.rotationDegrees(roll));
+        poseStack.rotateDegrees(Axis.XP, roll);
         poseStack.translate(0.0F, -2.5F, 0.0F);
         collector.submitCustomGeometry(poseStack, RenderTypes.cutoutMovingBlock(), (pose, vertexConsumer) ->
                 MODEL.door.render(pose, vertexConsumer, doorSprite, packedLight, packedOverlay));

@@ -147,9 +147,9 @@ public class HbmWaterDoorBlockEntityRenderer implements BlockEntityRenderer<HbmW
 
         poseStack.pushPose();
         poseStack.translate(0.5F, 0.0F, 0.5F);
-        poseStack.mulPose(Axis.YP.rotationDegrees(yawFor(facing)));
+        poseStack.rotateDegrees(Axis.YP, yawFor(facing));
         poseStack.translate(0.375F, 0.0F, 0.0F);
-        poseStack.mulPose(Axis.YP.rotationDegrees(90.0F));
+        poseStack.rotateDegrees(Axis.YP, 90.0F);
 
         collector.submitCustomGeometry(poseStack, RenderTypes.cutoutMovingBlock(), (pose, vertexConsumer) ->
                 MODEL.frame.render(pose, vertexConsumer, sprite, packedLight, packedOverlay, mirrored));
@@ -157,11 +157,11 @@ public class HbmWaterDoorBlockEntityRenderer implements BlockEntityRenderer<HbmW
         poseStack.pushPose();
         if (mirrored) {
             poseStack.translate(1.1875F, 0.0F, 0.0F);
-            poseStack.mulPose(Axis.YP.rotationDegrees(rotation));
+            poseStack.rotateDegrees(Axis.YP, rotation);
             poseStack.translate(-1.1875F, 0.0F, 0.0F);
         } else {
             poseStack.translate(-1.1875F, 0.0F, 0.0F);
-            poseStack.mulPose(Axis.YP.rotationDegrees(-rotation));
+            poseStack.rotateDegrees(Axis.YP, -rotation);
             poseStack.translate(1.1875F, 0.0F, 0.0F);
         }
 
@@ -179,7 +179,7 @@ public class HbmWaterDoorBlockEntityRenderer implements BlockEntityRenderer<HbmW
 
         poseStack.pushPose();
         poseStack.translate(wheelPivotX, 2.28125F, 0.0F);
-        poseStack.mulPose(Axis.ZP.rotationDegrees(wheelRotation));
+        poseStack.rotateDegrees(Axis.ZP, wheelRotation);
         poseStack.translate(-wheelPivotX, -2.28125F, 0.0F);
         collector.submitCustomGeometry(poseStack, RenderTypes.cutoutMovingBlock(), (pose, vertexConsumer) ->
                 MODEL.top.render(pose, vertexConsumer, sprite, packedLight, packedOverlay, mirrored));
@@ -187,7 +187,7 @@ public class HbmWaterDoorBlockEntityRenderer implements BlockEntityRenderer<HbmW
 
         poseStack.pushPose();
         poseStack.translate(wheelPivotX, 0.71875F, 0.0F);
-        poseStack.mulPose(Axis.ZP.rotationDegrees(wheelRotation));
+        poseStack.rotateDegrees(Axis.ZP, wheelRotation);
         poseStack.translate(-wheelPivotX, -0.71875F, 0.0F);
         collector.submitCustomGeometry(poseStack, RenderTypes.cutoutMovingBlock(), (pose, vertexConsumer) ->
                 MODEL.bottom.render(pose, vertexConsumer, sprite, packedLight, packedOverlay, mirrored));

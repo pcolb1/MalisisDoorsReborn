@@ -140,8 +140,8 @@ public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<Hb
 
         poseStack.pushPose();
         poseStack.translate(0.5F, 0.0F, 0.5F);
-        poseStack.mulPose(Axis.YP.rotationDegrees(yawFor(facing)));
-        poseStack.mulPose(Axis.YP.rotationDegrees(90.0F));
+        poseStack.rotateDegrees(Axis.YP, yawFor(facing));
+        poseStack.rotateDegrees(Axis.YP, 90.0F);
 
         collector.submitCustomGeometry(poseStack, RenderTypes.cutoutMovingBlock(), (pose, vertexConsumer) ->
                 MODEL.frame.render(pose, vertexConsumer, sprite, packedLight, packedOverlay));

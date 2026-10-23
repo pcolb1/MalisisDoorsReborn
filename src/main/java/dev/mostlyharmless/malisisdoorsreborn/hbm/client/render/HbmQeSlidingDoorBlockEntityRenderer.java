@@ -116,7 +116,7 @@ public class HbmQeSlidingDoorBlockEntityRenderer implements BlockEntityRenderer<
         poseStack.pushPose();
         poseStack.translate(0.5F, 0.5F, 0.5F);
         poseStack.scale(0.25F, 0.25F, 0.25F);
-        poseStack.mulPose(Axis.YP.rotationDegrees(90.0F));
+        poseStack.rotateDegrees(Axis.YP, 90.0F);
         poseStack.translate(0.15625F, -1.0F, 0.0F);
 
         final TextureAtlasSprite sprite = spriteFor(skinIndex);
@@ -149,7 +149,7 @@ public class HbmQeSlidingDoorBlockEntityRenderer implements BlockEntityRenderer<
 
         poseStack.pushPose();
         poseStack.translate(0.5F, 0.0F, 0.5F);
-        poseStack.mulPose(Axis.YP.rotationDegrees(yawFor(facing)));
+        poseStack.rotateDegrees(Axis.YP, yawFor(facing));
         poseStack.translate(0.53125F, 0.001F, 0.5F);
 
         collector.submitCustomGeometry(poseStack, RenderTypes.cutoutMovingBlock(), (pose, vertexConsumer) ->

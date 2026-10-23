@@ -159,7 +159,7 @@ public class HbmQeContainmentDoorBlockEntityRenderer implements BlockEntityRende
 
     private static void applyHbmTransform(@NotNull final PoseStack poseStack, @NotNull final Direction facing) {
         poseStack.translate(0.5F, 0.0F, 0.5F);
-        poseStack.mulPose(Axis.YP.rotationDegrees(yawFor(facing)));
+        poseStack.rotateDegrees(Axis.YP, yawFor(facing));
         poseStack.translate(0.25F, 0.0F, 0.0F);
     }
 

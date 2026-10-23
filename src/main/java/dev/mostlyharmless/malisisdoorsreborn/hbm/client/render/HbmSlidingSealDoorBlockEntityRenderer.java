@@ -142,7 +142,7 @@ public class HbmSlidingSealDoorBlockEntityRenderer implements BlockEntityRendere
     private static void applyItemBaseTransform(@NotNull final PoseStack poseStack) {
         poseStack.translate(0.5F, 0.5F, 0.5F);
         poseStack.scale(ITEM_BASE_SCALE, ITEM_BASE_SCALE, ITEM_BASE_SCALE);
-        poseStack.mulPose(Axis.YP.rotationDegrees(-90.0F));
+        poseStack.rotateDegrees(Axis.YP, -90.0F);
         poseStack.translate(-ITEM_DOOR_CENTER_X, -ITEM_DOOR_CENTER_Y, -ITEM_DOOR_CENTER_Z);
     }
 
@@ -158,7 +158,7 @@ public class HbmSlidingSealDoorBlockEntityRenderer implements BlockEntityRendere
 
         poseStack.pushPose();
         poseStack.translate(0.5F, 0.0F, 0.5F);
-        poseStack.mulPose(Axis.YP.rotationDegrees(yawFor(facing)));
+        poseStack.rotateDegrees(Axis.YP, yawFor(facing));
         poseStack.translate(0.5F, 0.0F, 0.0F);
 
         collector.submitCustomGeometry(poseStack, RenderTypes.cutoutMovingBlock(), (pose, vertexConsumer) ->

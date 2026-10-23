@@ -138,7 +138,7 @@ public class HbmCargoDoorBlockEntityRenderer implements BlockEntityRenderer<HbmC
 
         poseStack.pushPose();
         poseStack.translate(0.5F, 0.0F, 0.5F);
-        poseStack.mulPose(Axis.YP.rotationDegrees(yawFor(facing)));
+        poseStack.rotateDegrees(Axis.YP, yawFor(facing));
 
         collector.submitCustomGeometry(poseStack, RenderTypes.cutoutMovingBlock(), (pose, vertexConsumer) ->
                 MODEL.frame.render(pose, vertexConsumer, sprite, packedLight, packedOverlay, VertexTransform.NONE));
