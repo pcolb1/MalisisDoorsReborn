@@ -5,7 +5,9 @@ import org.jetbrains.annotations.NotNull;
 
 public enum HbmScrewdriverMode {
     CYCLE_DOOR_SKIN("Cycle Door Skin"),
-    CYCLE_REDSTONE_BEHAVIOUR("Cycle Redstone Behaviour");
+    CYCLE_REDSTONE_BEHAVIOUR("Cycle Redstone Behaviour"),
+    CYCLE_PULSE_DURATION("Cycle Pulse Duration"),
+    CYCLE_CARD_LEVELS("Cycle Card Levels");
 
     private final String displayName;
 
@@ -20,5 +22,10 @@ public enum HbmScrewdriverMode {
     public @NotNull HbmScrewdriverMode next() {
         final HbmScrewdriverMode[] values = values();
         return values[(ordinal() + 1) % values.length];
+    }
+
+    public @NotNull HbmScrewdriverMode previous() {
+        final HbmScrewdriverMode[] values = values();
+        return values[(ordinal() - 1 + values.length) % values.length];
     }
 }

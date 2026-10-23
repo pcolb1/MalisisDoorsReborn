@@ -52,6 +52,11 @@ public class HbmFireDoorBlockEntityRenderer implements BlockEntityRenderer<HbmFi
     }
 
     @Override
+    public boolean shouldRenderOffScreen(@NotNull final HbmFireDoorBlockEntity be) {
+        return true;
+    }
+
+    @Override
     public void render(@NotNull final HbmFireDoorBlockEntity be,
                        final float partialTick,
                        @NotNull final PoseStack poseStack,

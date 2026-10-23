@@ -20,3 +20,7 @@ The (Sonic) Screwdriver texture used by MalisisDoorsReborn is an original replac
 The GNU Lesser General Public License v3.0 and GNU General Public License v3.0 texts are included with this release under `META-INF/licenses/`.
 
 Source for the HBM-derived portions and their modifications is provided separately as the MalisisDoorsReborn HBM-derived source bundle.
+
+## Copper Doors/Trapdoors
+
+Copper door textures and sounds are derived from Minecraft assets and remain the property of Mojang Studios.

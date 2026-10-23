@@ -1,8 +1,9 @@
 package dev.mostlyharmless.malisisdoorsreborn.hbm.item;
 
-import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmDoorRedstoneMode;
+import dev.mostlyharmless.malisisdoorsreborn.common.DoorRedstoneMode;
 import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessHelper;
 import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessLevel;
+import dev.mostlyharmless.malisisdoorsreborn.block.AccessCardReaderCardLevelMode;
 
 import dev.mostlyharmless.malisisdoorsreborn.hbm.client.render.item.HbmVehicleDoorItemRenderer;
 import dev.mostlyharmless.malisisdoorsreborn.item.TooltipBlockItem;
@@ -31,10 +32,13 @@ public class HbmVehicleDoorBlockItem extends TooltipBlockItem {
     public static final String SKIN_TAG = "SkinIndex";
     public static final String REDSTONE_MODE_TAG = "RedstoneMode";
     private static final String SKIN_PREVIEW_CYCLE_TAG = "SkinPreviewCycle";
-    public static final int SKIN_COUNT = 1;
+    public static final int SKIN_COUNT = 4;
 
     private static final String[] SKIN_TRANSLATION_KEYS = {
-            "tooltip.malisisdoorsreborn.hbm_vehicle_door.skin.default"
+            "tooltip.malisisdoorsreborn.hbm_vehicle_door.skin.default",
+            "tooltip.malisisdoorsreborn.hbm_vehicle_door.skin.black",
+            "tooltip.malisisdoorsreborn.hbm_vehicle_door.skin.blue",
+            "tooltip.malisisdoorsreborn.hbm_vehicle_door.skin.red"
     };
 
     public HbmVehicleDoorBlockItem(final Supplier<? extends Block> block,
@@ -51,12 +55,26 @@ public class HbmVehicleDoorBlockItem extends TooltipBlockItem {
 
     public static ItemStack stackWithSkinRedstoneAccess(@NotNull final Item item,
                                                         final int skinIndex,
-                                                        @NotNull final HbmDoorRedstoneMode redstoneMode,
+                                                        @NotNull final DoorRedstoneMode redstoneMode,
                                                         @NotNull final DoorAccessLevel accessLevel) {
+        return stackWithSkinRedstoneAccess(
+                item,
+                skinIndex,
+                redstoneMode,
+                accessLevel,
+                AccessCardReaderCardLevelMode.defaultValue()
+        );
+    }
+
+    public static ItemStack stackWithSkinRedstoneAccess(@NotNull final Item item,
+                                                        final int skinIndex,
+                                                        @NotNull final DoorRedstoneMode redstoneMode,
+                                                        @NotNull final DoorAccessLevel accessLevel,
+                                                        @NotNull final AccessCardReaderCardLevelMode cardLevelMode) {
         final ItemStack stack = new ItemStack(item);
         setSkinIndex(stack, skinIndex);
         setRedstoneMode(stack, redstoneMode);
-        setAccessLevel(stack, accessLevel);
+        DoorAccessHelper.setAccessSettings(stack, accessLevel, cardLevelMode);
         return stack;
     }
 
@@ -102,15 +120,15 @@ public class HbmVehicleDoorBlockItem extends TooltipBlockItem {
         return Component.translatable(SKIN_TRANSLATION_KEYS[Math.floorMod(skinIndex, SKIN_TRANSLATION_KEYS.length)]);
     }
 
-    public static HbmDoorRedstoneMode redstoneModeFromStack(@NotNull final ItemStack stack) {
+    public static DoorRedstoneMode redstoneModeFromStack(@NotNull final ItemStack stack) {
         final CompoundTag tag = stack.getTag();
-        if (tag == null || !tag.contains(REDSTONE_MODE_TAG)) return HbmDoorRedstoneMode.DEFAULT;
-        return HbmDoorRedstoneMode.fromOrdinal(tag.getInt(REDSTONE_MODE_TAG));
+        if (tag == null || !tag.contains(REDSTONE_MODE_TAG)) return DoorRedstoneMode.DEFAULT;
+        return DoorRedstoneMode.fromOrdinal(tag.getInt(REDSTONE_MODE_TAG));
     }
 
     public static void setRedstoneMode(@NotNull final ItemStack stack,
-                                       @NotNull final HbmDoorRedstoneMode redstoneMode) {
-        if (redstoneMode == HbmDoorRedstoneMode.DEFAULT) {
+                                       @NotNull final DoorRedstoneMode redstoneMode) {
+        if (redstoneMode == DoorRedstoneMode.DEFAULT) {
             final CompoundTag tag = stack.getTag();
             if (tag != null) {
                 tag.remove(REDSTONE_MODE_TAG);
@@ -121,7 +139,7 @@ public class HbmVehicleDoorBlockItem extends TooltipBlockItem {
         stack.getOrCreateTag().putInt(REDSTONE_MODE_TAG, redstoneMode.ordinal());
     }
 
-    public static Component redstoneModeName(@NotNull final HbmDoorRedstoneMode redstoneMode) {
+    public static Component redstoneModeName(@NotNull final DoorRedstoneMode redstoneMode) {
         return redstoneMode.displayName();
     }
 
@@ -133,11 +151,6 @@ public class HbmVehicleDoorBlockItem extends TooltipBlockItem {
                                       @NotNull final DoorAccessLevel accessLevel) {
         DoorAccessHelper.setAccessLevel(stack, accessLevel);
     }
-
-    public static Component accessLevelName(@NotNull final DoorAccessLevel accessLevel) {
-        return DoorAccessHelper.accessLevelName(accessLevel);
-    }
-
 
     @Override
     public void inventoryTick(@NotNull final ItemStack stack,
@@ -163,7 +176,7 @@ public class HbmVehicleDoorBlockItem extends TooltipBlockItem {
 
         tooltip.add(Component.translatable("tooltip.malisisdoorsreborn.label.skin", skinName(skinIndexFromStack(stack))).withStyle(ChatFormatting.WHITE));
         tooltip.add(redstoneTooltip);
-        tooltip.add(Component.translatable("tooltip.malisisdoorsreborn.label.access", accessLevelName(accessLevel)).withStyle(ChatFormatting.WHITE));
+        DoorAccessHelper.appendAccessTooltip(tooltip, stack);
     }
 
     @Override

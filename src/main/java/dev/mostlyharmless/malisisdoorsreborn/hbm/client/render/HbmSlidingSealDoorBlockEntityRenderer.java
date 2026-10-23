@@ -34,7 +34,9 @@ public class HbmSlidingSealDoorBlockEntityRenderer implements BlockEntityRendere
 
     private static final ResourceLocation[] TEXTURES = {
             ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/seal_door.png"),
-            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/seal_door_trefoil.png")
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/seal_door_trefoil.png"),
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/seal_door_clean.png"),
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/seal_door_skull.png")
     };
     private static final ObjModel MODEL = ObjModel.load("assets/malisisdoorsreborn/models/pheodoors/seal_door.obj");
     private static final float MAX_SLIDE = 0.9F;
@@ -50,6 +52,11 @@ public class HbmSlidingSealDoorBlockEntityRenderer implements BlockEntityRendere
     @Override
     public int getViewDistance() {
         return MdrDefaults.LARGE_SPECIAL_DOOR_VIEW_DISTANCE;
+    }
+
+    @Override
+    public boolean shouldRenderOffScreen(@NotNull final HbmSlidingSealDoorBlockEntity be) {
+        return true;
     }
 
     @Override

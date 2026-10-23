@@ -50,8 +50,10 @@ public class HbmScrewdriverItem extends TooltipItem {
         return HbmScrewdriverMode.values()[Math.floorMod(tag.getInt(MODE_TAG), HbmScrewdriverMode.values().length)];
     }
 
-    public static @NotNull HbmScrewdriverMode cycleMode(@NotNull final net.minecraft.world.item.ItemStack stack) {
-        final HbmScrewdriverMode mode = modeFromStack(stack).next();
+    public static @NotNull HbmScrewdriverMode cycleMode(@NotNull final net.minecraft.world.item.ItemStack stack,
+                                                                final boolean forward) {
+        final HbmScrewdriverMode currentMode = modeFromStack(stack);
+        final HbmScrewdriverMode mode = forward ? currentMode.next() : currentMode.previous();
         stack.getOrCreateTag().putInt(MODE_TAG, mode.ordinal());
         return mode;
     }

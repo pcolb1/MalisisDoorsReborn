@@ -29,10 +29,13 @@ public final class HbmScrewdriverClientHooks {
         final InteractionHand hand = screwdriverHand(player);
         if (hand == null) return;
 
+        final double scrollDelta = event.getScrollDelta();
+        if (scrollDelta == 0.0D) return;
+        final boolean forward = scrollDelta > 0.0D;
         final ItemStack stack = player.getItemInHand(hand);
-        final HbmScrewdriverMode mode = HbmScrewdriverItem.cycleMode(stack);
+        final HbmScrewdriverMode mode = HbmScrewdriverItem.cycleMode(stack, forward);
         HbmScrewdriverItem.showMode(player, mode);
-        MdrNetwork.sendHbmScrewdriverModeCycle(hand);
+        MdrNetwork.sendHbmScrewdriverModeCycle(hand, forward);
         event.setCanceled(true);
     }
 

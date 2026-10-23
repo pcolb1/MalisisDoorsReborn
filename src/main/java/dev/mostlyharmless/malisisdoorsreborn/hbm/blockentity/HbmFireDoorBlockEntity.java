@@ -1,9 +1,11 @@
 package dev.mostlyharmless.malisisdoorsreborn.hbm.blockentity;
 
 import dev.mostlyharmless.malisisdoorsreborn.block.CustomSkinnedDoorHelper;
-import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmDoorRedstoneMode;
+import dev.mostlyharmless.malisisdoorsreborn.common.DoorRedstoneMode;
 import dev.mostlyharmless.malisisdoorsreborn.access.AccessControlledDoor;
+import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessHelper;
 import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessLevel;
+import dev.mostlyharmless.malisisdoorsreborn.block.AccessCardReaderCardLevelMode;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmFireDoorBlock;
 import dev.mostlyharmless.malisisdoorsreborn.registry.MdrBlockEntities;
 import dev.mostlyharmless.malisisdoorsreborn.network.MdrNetwork;
@@ -29,8 +31,9 @@ public class HbmFireDoorBlockEntity extends BlockEntity implements AccessControl
     private float progressPrev = 0.0F;
     private float progress = 0.0F;
     private int skinIndex = 0;
-    private HbmDoorRedstoneMode redstoneMode = HbmDoorRedstoneMode.DEFAULT;
+    private DoorRedstoneMode redstoneMode = DoorRedstoneMode.DEFAULT;
     private DoorAccessLevel accessLevel = DoorAccessLevel.DEFAULT;
+    private AccessCardReaderCardLevelMode cardLevelMode = AccessCardReaderCardLevelMode.defaultValue();
     private boolean skinReconciled = false;
 
     public HbmFireDoorBlockEntity(final BlockPos pos, final BlockState state) {
@@ -81,8 +84,9 @@ public class HbmFireDoorBlockEntity extends BlockEntity implements AccessControl
 
     private void loadShared(@NotNull final CompoundTag tag) {
         skinIndex = Math.floorMod(tag.getInt("SkinIndex"), 5);
-        redstoneMode = tag.contains("RedstoneMode") ? HbmDoorRedstoneMode.fromOrdinal(tag.getInt("RedstoneMode")) : HbmDoorRedstoneMode.DEFAULT;
+        redstoneMode = tag.contains("RedstoneMode") ? DoorRedstoneMode.fromOrdinal(tag.getInt("RedstoneMode")) : DoorRedstoneMode.DEFAULT;
         accessLevel = tag.contains("AccessLevel") ? DoorAccessLevel.fromOrdinal(tag.getInt("AccessLevel")) : DoorAccessLevel.DEFAULT;
+        cardLevelMode = DoorAccessHelper.cardLevelModeFromTag(tag, accessLevel);
         skinReconciled = false;
     }
 
@@ -115,11 +119,11 @@ public class HbmFireDoorBlockEntity extends BlockEntity implements AccessControl
         return skinIndex;
     }
 
-    public HbmDoorRedstoneMode getRedstoneMode() {
+    public DoorRedstoneMode getRedstoneMode() {
         return redstoneMode;
     }
 
-    public void setRedstoneMode(final HbmDoorRedstoneMode redstoneMode) {
+    public void setRedstoneMode(final DoorRedstoneMode redstoneMode) {
         this.redstoneMode = redstoneMode;
         setChanged();
         if (level != null) {
@@ -127,7 +131,7 @@ public class HbmFireDoorBlockEntity extends BlockEntity implements AccessControl
         }
     }
 
-    public HbmDoorRedstoneMode cycleRedstoneMode() {
+    public DoorRedstoneMode cycleRedstoneMode() {
         redstoneMode = redstoneMode.next();
         setChanged();
         if (level != null) {
@@ -176,11 +180,32 @@ public class HbmFireDoorBlockEntity extends BlockEntity implements AccessControl
     }
 
     @Override
+    public @NotNull AccessCardReaderCardLevelMode getCardLevelMode() {
+        return cardLevelMode;
+    }
+
+    @Override
+    public void setCardLevelMode(@NotNull final AccessCardReaderCardLevelMode cardLevelMode) {
+        this.cardLevelMode = cardLevelMode;
+        setChanged();
+        if (level != null) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
+        }
+    }
+
+    @Override
+    public @NotNull AccessCardReaderCardLevelMode cycleCardLevelMode() {
+        setCardLevelMode(cardLevelMode.next());
+        return cardLevelMode;
+    }
+
+    @Override
     protected void saveAdditional(@NotNull final CompoundTag tag) {
         super.saveAdditional(tag);
         tag.putInt("SkinIndex", skinIndex);
         tag.putInt("RedstoneMode", redstoneMode.ordinal());
         tag.putInt("AccessLevel", accessLevel.ordinal());
+        tag.putString(DoorAccessHelper.CARD_LEVEL_MODE_TAG, cardLevelMode.serializedName());
     }
 
     @Override
