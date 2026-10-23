@@ -78,6 +78,11 @@ public class HbmVaultDoorBlockEntityRenderer implements BlockEntityRenderer<HbmV
     }
 
     @Override
+    public boolean shouldRenderOffScreen(@NotNull final HbmVaultDoorBlockEntity be) {
+        return true;
+    }
+
+    @Override
     public void render(@NotNull final HbmVaultDoorBlockEntity be,
                        final float partialTick,
                        @NotNull final PoseStack poseStack,

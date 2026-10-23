@@ -1,10 +1,13 @@
 package dev.mostlyharmless.malisisdoorsreborn.hbm.blockentity;
 
 import dev.mostlyharmless.malisisdoorsreborn.block.CustomSkinnedDoorHelper;
-import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmDoorRedstoneMode;
+import dev.mostlyharmless.malisisdoorsreborn.common.DoorRedstoneMode;
 import dev.mostlyharmless.malisisdoorsreborn.access.AccessControlledDoor;
+import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessHelper;
 import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessLevel;
+import dev.mostlyharmless.malisisdoorsreborn.block.AccessCardReaderCardLevelMode;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmVehicleDoorBlock;
+import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmVehicleDoorBlockItem;
 import dev.mostlyharmless.malisisdoorsreborn.registry.MdrBlockEntities;
 import dev.mostlyharmless.malisisdoorsreborn.network.MdrNetwork;
 import net.minecraft.core.BlockPos;
@@ -29,8 +32,9 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
     private float progressPrev = 0.0F;
     private float progress = 0.0F;
     private int skinIndex = 0;
-    private HbmDoorRedstoneMode redstoneMode = HbmDoorRedstoneMode.DEFAULT;
+    private DoorRedstoneMode redstoneMode = DoorRedstoneMode.DEFAULT;
     private DoorAccessLevel accessLevel = DoorAccessLevel.DEFAULT;
+    private AccessCardReaderCardLevelMode cardLevelMode = AccessCardReaderCardLevelMode.defaultValue();
     private boolean skinReconciled = false;
 
     public HbmVehicleDoorBlockEntity(final BlockPos pos, final BlockState state) {
@@ -80,9 +84,10 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
     }
 
     private void loadShared(@NotNull final CompoundTag tag) {
-        skinIndex = Math.floorMod(tag.getInt("SkinIndex"), 1);
-        redstoneMode = tag.contains("RedstoneMode") ? HbmDoorRedstoneMode.fromOrdinal(tag.getInt("RedstoneMode")) : HbmDoorRedstoneMode.DEFAULT;
+        skinIndex = Math.floorMod(tag.getInt("SkinIndex"), HbmVehicleDoorBlockItem.SKIN_COUNT);
+        redstoneMode = tag.contains("RedstoneMode") ? DoorRedstoneMode.fromOrdinal(tag.getInt("RedstoneMode")) : DoorRedstoneMode.DEFAULT;
         accessLevel = tag.contains("AccessLevel") ? DoorAccessLevel.fromOrdinal(tag.getInt("AccessLevel")) : DoorAccessLevel.DEFAULT;
+        cardLevelMode = DoorAccessHelper.cardLevelModeFromTag(tag, accessLevel);
         skinReconciled = false;
     }
 
@@ -92,7 +97,7 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
     }
 
     public void setSkinIndex(final int skinIndex) {
-        this.skinIndex = Math.floorMod(skinIndex, 1);
+        this.skinIndex = Math.floorMod(skinIndex, HbmVehicleDoorBlockItem.SKIN_COUNT);
         skinReconciled = true;
         setChanged();
         if (level != null) {
@@ -101,13 +106,13 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
     }
 
     public void setSkinIndexNoBlockUpdate(final int skinIndex) {
-        this.skinIndex = Math.floorMod(skinIndex, 1);
+        this.skinIndex = Math.floorMod(skinIndex, HbmVehicleDoorBlockItem.SKIN_COUNT);
         skinReconciled = true;
         setChanged();
     }
 
     public int cycleSkin() {
-        skinIndex = 0;
+        skinIndex = (skinIndex + 1) % HbmVehicleDoorBlockItem.SKIN_COUNT;
         setChanged();
         if (level != null) {
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
@@ -115,11 +120,11 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
         return skinIndex;
     }
 
-    public HbmDoorRedstoneMode getRedstoneMode() {
+    public DoorRedstoneMode getRedstoneMode() {
         return redstoneMode;
     }
 
-    public void setRedstoneMode(final HbmDoorRedstoneMode redstoneMode) {
+    public void setRedstoneMode(final DoorRedstoneMode redstoneMode) {
         this.redstoneMode = redstoneMode;
         setChanged();
         if (level != null) {
@@ -127,7 +132,7 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
         }
     }
 
-    public HbmDoorRedstoneMode cycleRedstoneMode() {
+    public DoorRedstoneMode cycleRedstoneMode() {
         redstoneMode = redstoneMode.next();
         setChanged();
         if (level != null) {
@@ -160,6 +165,28 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
         return accessLevel;
     }
 
+    @Override
+    public @NotNull AccessCardReaderCardLevelMode getCardLevelMode() {
+        return cardLevelMode;
+    }
+
+    @Override
+    public void setCardLevelMode(@NotNull final AccessCardReaderCardLevelMode cardLevelMode) {
+        if (this.cardLevelMode == cardLevelMode) return;
+        this.cardLevelMode = cardLevelMode;
+        setChanged();
+        if (level != null) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
+        }
+    }
+
+    @Override
+    public @NotNull AccessCardReaderCardLevelMode cycleCardLevelMode() {
+        final AccessCardReaderCardLevelMode next = cardLevelMode.next();
+        setCardLevelMode(next);
+        return next;
+    }
+
 
     private void reconcileSkinOnce(@NotNull final Level level,
                                    @NotNull final BlockPos pos,
@@ -181,6 +208,7 @@ public class HbmVehicleDoorBlockEntity extends BlockEntity implements AccessCont
         tag.putInt("SkinIndex", skinIndex);
         tag.putInt("RedstoneMode", redstoneMode.ordinal());
         tag.putInt("AccessLevel", accessLevel.ordinal());
+        tag.putString(DoorAccessHelper.CARD_LEVEL_MODE_TAG, cardLevelMode.serializedName());
     }
 
     @Override

@@ -1,11 +1,13 @@
 package dev.mostlyharmless.malisisdoorsreborn.hbm.block;
 
+import dev.mostlyharmless.malisisdoorsreborn.common.DoorRedstoneMode;
 import dev.mostlyharmless.malisisdoorsreborn.block.CustomDoorBreakTarget;
 import dev.mostlyharmless.malisisdoorsreborn.block.CustomSkinnedDoorTarget;
 import dev.mostlyharmless.malisisdoorsreborn.client.render.door.CustomDoorBreakHelper;
 import dev.mostlyharmless.malisisdoorsreborn.access.AccessCardDoorTarget;
 import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessHelper;
 import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessLevel;
+import dev.mostlyharmless.malisisdoorsreborn.block.AccessCardReaderCardLevelMode;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.blockentity.HbmFireDoorBlockEntity;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmFireDoorBlockItem;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmScrewdriverMode;
@@ -31,6 +33,7 @@ import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.RenderShape;
+import net.minecraft.world.level.block.SimpleWaterloggedBlock;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
@@ -62,11 +65,12 @@ import java.util.List;
 import java.util.function.Consumer;
 
 @SuppressWarnings("deprecation")
-public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBreakTarget, CustomSkinnedDoorTarget, HbmScrewdriverDoorTarget, AccessCardDoorTarget {
+public class HbmFireDoorBlock extends Block implements EntityBlock, SimpleWaterloggedBlock, CustomDoorBreakTarget, CustomSkinnedDoorTarget, HbmScrewdriverDoorTarget, AccessCardDoorTarget {
 
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
     public static final BooleanProperty OPEN = BlockStateProperties.OPEN;
     public static final BooleanProperty POWERED = BlockStateProperties.POWERED;
+    public static final BooleanProperty WATERLOGGED = BlockStateProperties.WATERLOGGED;
     public static final IntegerProperty X_PART = IntegerProperty.create("x", 0, 3);
     public static final IntegerProperty Y_PART = IntegerProperty.create("y", 0, 2);
     public static final EnumProperty<HbmFireDoorPart> PART = EnumProperty.create("part", HbmFireDoorPart.class);
@@ -82,11 +86,13 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
                 .sound(SoundType.METAL)
                 .strength(10.0F, 1000.0F)
                 .requiresCorrectToolForDrops()
-                .noOcclusion());
+                .noOcclusion()
+                .dynamicShape());
         registerDefaultState(stateDefinition.any()
                 .setValue(FACING, Direction.NORTH)
                 .setValue(OPEN, false)
                 .setValue(POWERED, false)
+                .setValue(WATERLOGGED, false)
                 .setValue(X_PART, ROOT_X_PART)
                 .setValue(Y_PART, ROOT_Y_PART)
                 .setValue(PART, HbmFireDoorPart.ROOT)
@@ -119,21 +125,13 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
     public AABB customDoorBreakBounds(@NotNull final BlockGetter level,
                                       @NotNull final BlockPos rootPos,
                                       @NotNull final BlockState rootState) {
-        AABB bounds = null;
         final Direction facing = rootState.getValue(FACING);
-        for (int x = 0; x < WIDTH; x++) {
-            for (int y = 0; y < HEIGHT; y++) {
-                final BlockPos partPos = partPos(rootPos, facing, x, y);
-                final BlockState partState = level.getBlockState(partPos);
-                if (partState.getBlock() != this) continue;
-                final double minX = partPos.getX() - rootPos.getX();
-                final double minY = partPos.getY() - rootPos.getY();
-                final double minZ = partPos.getZ() - rootPos.getZ();
-                final AABB partBounds = new AABB(minX, minY, minZ, minX + 1.0D, minY + 1.0D, minZ + 1.0D);
-                bounds = bounds == null ? partBounds : bounds.minmax(partBounds);
-            }
-        }
-        return bounds == null ? new AABB(0.0D, 0.0D, 0.0D, 1.0D, 1.0D, 1.0D) : bounds;
+        final AABB bounds = HbmBreakingOverlayHelper.fullDoorBounds(
+                level, rootPos, facing, this, WIDTH, HEIGHT, HbmFireDoorBlock::partPos
+        );
+        return HbmBreakingOverlayHelper.centredSlab(
+                bounds, facing, 5.0D / 16.0D, 11.0D / 16.0D
+        );
     }
 
     @Override
@@ -190,7 +188,7 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
 
     @Override
     protected void createBlockStateDefinition(final StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(FACING, OPEN, POWERED, X_PART, Y_PART, PART, SKIN);
+        builder.add(FACING, OPEN, POWERED, WATERLOGGED, X_PART, Y_PART, PART, SKIN);
     }
 
     @Override
@@ -206,7 +204,28 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
         if (!canPlaceDoor(level, rootPos, facing, context)) return null;
         return defaultBlockState()
                 .setValue(FACING, facing)
+                .setValue(WATERLOGGED, level.getFluidState(rootPos).getType() == Fluids.WATER)
                 .setValue(SKIN, HbmFireDoorBlockItem.skinIndexFromStack(context.getItemInHand()));
+    }
+
+    @Override
+    public @NotNull BlockState updateShape(@NotNull final BlockState state,
+                                           @NotNull final Direction direction,
+                                           @NotNull final BlockState neighbourState,
+                                           @NotNull final LevelAccessor level,
+                                           @NotNull final BlockPos pos,
+                                           @NotNull final BlockPos neighbourPos) {
+        if (state.getValue(WATERLOGGED)) {
+            level.scheduleTick(pos, Fluids.WATER, Fluids.WATER.getTickDelay(level));
+        }
+        return super.updateShape(state, direction, neighbourState, level, pos, neighbourPos);
+    }
+
+    @Override
+    public @NotNull FluidState getFluidState(@NotNull final BlockState state) {
+        return state.getValue(WATERLOGGED)
+                ? Fluids.WATER.getSource(false)
+                : super.getFluidState(state);
     }
 
     @Override
@@ -217,13 +236,15 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
                             @NotNull final ItemStack stack) {
         if (!level.isClientSide) {
             final int skinIndex = HbmFireDoorBlockItem.skinIndexFromStack(stack);
-            final HbmDoorRedstoneMode redstoneMode = HbmFireDoorBlockItem.redstoneModeFromStack(stack);
+            final DoorRedstoneMode redstoneMode = HbmFireDoorBlockItem.redstoneModeFromStack(stack);
             final DoorAccessLevel accessLevel = HbmFireDoorBlockItem.accessLevelFromStack(stack);
+            final AccessCardReaderCardLevelMode cardLevelMode = DoorAccessHelper.cardLevelModeFromStack(stack);
             placeDoorParts(level, pos, state.getValue(FACING), state.getValue(OPEN), state.getValue(POWERED), skinIndex);
             if (level.getBlockEntity(pos) instanceof final HbmFireDoorBlockEntity door) {
                 door.setSkinIndex(skinIndex);
                 door.setRedstoneMode(redstoneMode);
                 door.setAccessLevel(accessLevel);
+                door.setCardLevelMode(cardLevelMode);
             }
         }
     }
@@ -241,7 +262,7 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
         if (isDoorMoving(level, rootPos, root)) return InteractionResult.CONSUME;
 
         if (level.getBlockEntity(rootPos) instanceof final HbmFireDoorBlockEntity accessDoor
-                && !DoorAccessHelper.canOpen(player, accessDoor.getAccessLevel())) {
+                && !DoorAccessHelper.canOpen(player, accessDoor)) {
                     DoorAccessHelper.showAccessLevel(player, accessDoor.getAccessLevel());
             return InteractionResult.CONSUME;
         }
@@ -267,7 +288,7 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
         if (level.getBlockEntity(rootPos) instanceof final HbmFireDoorBlockEntity accessDoor) {
             final InteractionResult accessResult = DoorAccessHelper.handleAccessCardUse(level, rootPos, player, accessDoor, cardStack);
             if (accessResult != InteractionResult.PASS) return accessResult;
-            if (!DoorAccessHelper.canOpen(player, accessDoor.getAccessLevel())) {
+            if (!DoorAccessHelper.canOpen(player, accessDoor)) {
                 DoorAccessHelper.showAccessLevel(player, accessDoor.getAccessLevel());
                 return InteractionResult.CONSUME;
             }
@@ -287,7 +308,28 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
         return switch (mode) {
             case CYCLE_DOOR_SKIN -> cycleSkinWithScrewdriver(level, pos, state, player);
             case CYCLE_REDSTONE_BEHAVIOUR -> cycleRedstoneModeWithScrewdriver(level, pos, state, player);
+            case CYCLE_PULSE_DURATION -> InteractionResult.PASS;
+            case CYCLE_CARD_LEVELS -> cycleCardLevelModeWithScrewdriver(level, pos, state, player);
         };
+    }
+
+    private @NotNull InteractionResult cycleCardLevelModeWithScrewdriver(@NotNull final Level level,
+                                                                         @NotNull final BlockPos pos,
+                                                                         @NotNull final BlockState state,
+                                                                         @NotNull final Player player) {
+        if (level.isClientSide) return InteractionResult.SUCCESS;
+
+        final BlockPos rootPos = rootPos(pos, state);
+        final BlockState root = level.getBlockState(rootPos);
+        if (root.getBlock() != this) return InteractionResult.PASS;
+        if (isDoorMoving(level, rootPos, root)) return InteractionResult.CONSUME;
+
+        if (level.getBlockEntity(rootPos) instanceof final HbmFireDoorBlockEntity door) {
+            DoorAccessHelper.cycleCardLevelMode(level, rootPos, player, door);
+            return InteractionResult.CONSUME;
+        }
+
+        return InteractionResult.PASS;
     }
 
     private @NotNull InteractionResult cycleSkinWithScrewdriver(@NotNull final Level level,
@@ -324,7 +366,7 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
         if (isDoorMoving(level, rootPos, root)) return InteractionResult.CONSUME;
 
         if (level.getBlockEntity(rootPos) instanceof final HbmFireDoorBlockEntity door) {
-            final HbmDoorRedstoneMode mode = door.cycleRedstoneMode();
+            final DoorRedstoneMode mode = door.cycleRedstoneMode();
             player.displayClientMessage(Component.translatable("tooltip.malisisdoorsreborn.label.redstone", mode.displayName()), true);
             playScrewdriverClick(level, rootPos);
             return InteractionResult.CONSUME;
@@ -395,9 +437,10 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
                                                 @NotNull final BlockPos pos,
                                                 @NotNull final BlockState state) {
         final BlockPos rootPos = rootPos(pos, state);
-        final HbmDoorRedstoneMode redstoneMode = level.getBlockEntity(rootPos) instanceof final HbmFireDoorBlockEntity door ? door.getRedstoneMode() : HbmDoorRedstoneMode.DEFAULT;
+        final DoorRedstoneMode redstoneMode = level.getBlockEntity(rootPos) instanceof final HbmFireDoorBlockEntity door ? door.getRedstoneMode() : DoorRedstoneMode.DEFAULT;
         final DoorAccessLevel accessLevel = level.getBlockEntity(rootPos) instanceof final HbmFireDoorBlockEntity door ? door.getAccessLevel() : DoorAccessLevel.DEFAULT;
-        return HbmFireDoorBlockItem.stackWithSkinRedstoneAccess(MdrItems.HBM_FIRE_DOOR.get(), skinIndexAt(level, rootPos), redstoneMode, accessLevel);
+        final AccessCardReaderCardLevelMode cardLevelMode = level.getBlockEntity(rootPos) instanceof final HbmFireDoorBlockEntity door ? door.getCardLevelMode() : AccessCardReaderCardLevelMode.defaultValue();
+        return HbmFireDoorBlockItem.stackWithSkinRedstoneAccess(MdrItems.HBM_FIRE_DOOR.get(), skinIndexAt(level, rootPos), redstoneMode, accessLevel, cardLevelMode);
     }
 
     @Override
@@ -408,24 +451,10 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
         final int entitySkin = blockEntity instanceof final HbmFireDoorBlockEntity doorEntity ? doorEntity.getSkinIndex() : 0;
         final int stateSkin = state.hasProperty(SKIN) ? state.getValue(SKIN) : 0;
         final int skinIndex = stateSkin != 0 || entitySkin == 0 ? stateSkin : entitySkin;
-        final HbmDoorRedstoneMode redstoneMode = blockEntity instanceof final HbmFireDoorBlockEntity doorEntity ? doorEntity.getRedstoneMode() : HbmDoorRedstoneMode.DEFAULT;
+        final DoorRedstoneMode redstoneMode = blockEntity instanceof final HbmFireDoorBlockEntity doorEntity ? doorEntity.getRedstoneMode() : DoorRedstoneMode.DEFAULT;
         final DoorAccessLevel accessLevel = blockEntity instanceof final HbmFireDoorBlockEntity doorEntity ? doorEntity.getAccessLevel() : DoorAccessLevel.DEFAULT;
-        return List.of(HbmFireDoorBlockItem.stackWithSkinRedstoneAccess(MdrItems.HBM_FIRE_DOOR.get(), skinIndex, redstoneMode, accessLevel));
-    }
-
-    @Override
-    public boolean onDestroyedByPlayer(@NotNull final BlockState state,
-                                       @NotNull final Level level,
-                                       @NotNull final BlockPos pos,
-                                       @NotNull final Player player,
-                                       final boolean willHarvest,
-                                       @NotNull final FluidState fluid) {
-        if (player.isCreative()) {
-            final BlockPos rootPos = rootPos(pos, state);
-            if (pos.equals(rootPos)) removeDoorParts(level, rootPos, state.getValue(FACING));
-            return level.setBlock(pos, fluid.createLegacyBlock(), level.isClientSide ? Block.UPDATE_ALL_IMMEDIATE : Block.UPDATE_ALL);
-        }
-        return super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid);
+        final AccessCardReaderCardLevelMode cardLevelMode = blockEntity instanceof final HbmFireDoorBlockEntity doorEntity ? doorEntity.getCardLevelMode() : AccessCardReaderCardLevelMode.defaultValue();
+        return List.of(HbmFireDoorBlockItem.stackWithSkinRedstoneAccess(MdrItems.HBM_FIRE_DOOR.get(), skinIndex, redstoneMode, accessLevel, cardLevelMode));
     }
 
     @Override
@@ -448,7 +477,14 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
                                                  @NotNull final BlockGetter level,
                                                  @NotNull final BlockPos pos,
                                                  @NotNull final CollisionContext context) {
-        return collisionShapeForPart(state);
+        final BlockPos rootPos = rootPos(pos, state);
+        final Boolean rootOpen = HbmCollisionHelper.rootOpen(level, rootPos, this);
+        if (rootOpen == null) return collisionShapeForPart(state);
+
+        final float progress = level.getBlockEntity(rootPos) instanceof final HbmFireDoorBlockEntity door
+                ? door.getProgress(1.0F)
+                : rootOpen ? 1.0F : 0.0F;
+        return collisionShapeForPart(state, progress);
     }
 
     private VoxelShape fullDoorShape(final BlockState state) {
@@ -477,14 +513,26 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
     }
 
     private VoxelShape collisionShapeForPart(final BlockState state) {
-        if (!state.getValue(OPEN)) return Shapes.block();
+        return collisionShapeForPart(state, state.getValue(OPEN) ? 1.0F : 0.0F);
+    }
 
+    private VoxelShape collisionShapeForPart(final BlockState state, final float progress) {
         final int localX = state.getValue(X_PART) - ROOT_X_PART;
         final int localY = state.getValue(Y_PART) - ROOT_Y_PART;
+        VoxelShape shape = Shapes.empty();
 
-        if (localX == 1 || localX == -2) return Shapes.block();
-        if (localY == HEIGHT - 1) return Block.box(0.0D, 12.0D, 0.0D, 16.0D, 16.0D, 16.0D);
-        return Shapes.empty();
+        if (localX == 1 || localX == -2) {
+            shape = Shapes.block();
+        } else if (localY == HEIGHT - 1) {
+            shape = Block.box(0.0D, 12.0D, 0.0D, 16.0D, 16.0D, 16.0D);
+        }
+
+        final double raise = Math.max(0.0D, Math.min(1.0D, progress)) * 2.75D;
+        final double minY = Math.max(0.0D, raise - localY);
+        if (minY < 1.0D) {
+            shape = Shapes.or(shape, Shapes.box(0.0D, minY, 0.0D, 1.0D, 1.0D, 1.0D));
+        }
+        return shape;
     }
 
     @Override
@@ -518,8 +566,9 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
             for (int y = 0; y < HEIGHT; y++) {
                 final BlockPos partPos = partPos(rootPos, facing, x, y);
                 final BlockState existing = level.getBlockState(partPos);
-                if (!partPos.equals(rootPos) && !existing.canBeReplaced(context)) return false;
-                if (partPos.equals(rootPos) && !existing.canBeReplaced(context)) return false;
+                final FluidState fluid = level.getFluidState(partPos);
+                if (!existing.canBeReplaced(context)
+                        || (fluid.getType() != Fluids.EMPTY && fluid.getType() != Fluids.WATER)) return false;
             }
         }
         return true;
@@ -534,7 +583,13 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
         for (int x = 0; x < WIDTH; x++) {
             for (int y = 0; y < HEIGHT; y++) {
                 final HbmFireDoorPart part = (x == ROOT_X_PART && y == ROOT_Y_PART) ? HbmFireDoorPart.ROOT : HbmFireDoorPart.PART;
-                level.setBlock(partPos(rootPos, facing, x, y), base.setValue(X_PART, x).setValue(Y_PART, y).setValue(PART, part), Block.UPDATE_ALL);
+                final BlockPos partPos = partPos(rootPos, facing, x, y);
+                final boolean waterlogged = level.getFluidState(partPos).getType() == Fluids.WATER;
+                level.setBlock(partPos, base
+                        .setValue(WATERLOGGED, waterlogged)
+                        .setValue(X_PART, x)
+                        .setValue(Y_PART, y)
+                        .setValue(PART, part), Block.UPDATE_ALL);
             }
         }
     }
@@ -545,7 +600,13 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
                 final BlockPos partPos = partPos(rootPos, facing, x, y);
                 final BlockState state = level.getBlockState(partPos);
                 if (state.getBlock() == this) {
-                    level.setBlock(partPos, Fluids.EMPTY.defaultFluidState().createLegacyBlock(), Block.UPDATE_ALL);
+                    level.setBlock(
+                            partPos,
+                            state.getValue(WATERLOGGED)
+                                    ? Fluids.WATER.defaultFluidState().createLegacyBlock()
+                                    : Fluids.EMPTY.defaultFluidState().createLegacyBlock(),
+                            Block.UPDATE_ALL
+                    );
                 }
             }
         }
@@ -568,7 +629,7 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
                                     @NotNull final BlockPos rootPos) {
         if (level.getBlockEntity(rootPos) instanceof final HbmFireDoorBlockEntity door) {
             if (door.getAccessLevel() != DoorAccessLevel.DEFAULT) return true;
-            return door.getRedstoneMode() != HbmDoorRedstoneMode.REDSTONE_ONLY;
+            return door.getRedstoneMode() != DoorRedstoneMode.REDSTONE_ONLY;
         }
         return true;
     }
@@ -576,7 +637,7 @@ public class HbmFireDoorBlock extends Block implements EntityBlock, CustomDoorBr
     private void applyRedstoneChange(@NotNull final Level level,
                                      @NotNull final BlockPos rootPos,
                                      final boolean powered,
-                                     @NotNull final HbmDoorRedstoneMode mode) {
+                                     @NotNull final DoorRedstoneMode mode) {
         switch (mode) {
             case DEFAULT, REDSTONE_ONLY -> setDoorOpen(level, rootPos, powered, null);
             case ALWAYS_IGNORE -> {}

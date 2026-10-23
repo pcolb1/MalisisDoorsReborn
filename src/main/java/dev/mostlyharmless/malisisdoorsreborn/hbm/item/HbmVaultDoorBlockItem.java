@@ -1,8 +1,9 @@
 package dev.mostlyharmless.malisisdoorsreborn.hbm.item;
 
-import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmDoorRedstoneMode;
+import dev.mostlyharmless.malisisdoorsreborn.common.DoorRedstoneMode;
 import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessHelper;
 import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessLevel;
+import dev.mostlyharmless.malisisdoorsreborn.block.AccessCardReaderCardLevelMode;
 
 import dev.mostlyharmless.malisisdoorsreborn.hbm.client.render.item.HbmVaultDoorItemRenderer;
 import dev.mostlyharmless.malisisdoorsreborn.item.TooltipBlockItem;
@@ -59,12 +60,26 @@ public class HbmVaultDoorBlockItem extends TooltipBlockItem {
 
     public static ItemStack stackWithSkinRedstoneAccess(@NotNull final Item item,
                                                         final int skinIndex,
-                                                        @NotNull final HbmDoorRedstoneMode redstoneMode,
+                                                        @NotNull final DoorRedstoneMode redstoneMode,
                                                         @NotNull final DoorAccessLevel accessLevel) {
+        return stackWithSkinRedstoneAccess(
+                item,
+                skinIndex,
+                redstoneMode,
+                accessLevel,
+                AccessCardReaderCardLevelMode.defaultValue()
+        );
+    }
+
+    public static ItemStack stackWithSkinRedstoneAccess(@NotNull final Item item,
+                                                        final int skinIndex,
+                                                        @NotNull final DoorRedstoneMode redstoneMode,
+                                                        @NotNull final DoorAccessLevel accessLevel,
+                                                        @NotNull final AccessCardReaderCardLevelMode cardLevelMode) {
         final ItemStack stack = new ItemStack(item);
         setSkinIndex(stack, skinIndex);
         setRedstoneMode(stack, redstoneMode);
-        setAccessLevel(stack, accessLevel);
+        DoorAccessHelper.setAccessSettings(stack, accessLevel, cardLevelMode);
         return stack;
     }
 
@@ -117,15 +132,15 @@ public class HbmVaultDoorBlockItem extends TooltipBlockItem {
         return Component.translatable(SKIN_TRANSLATION_KEYS[Math.floorMod(skinIndex, SKIN_TRANSLATION_KEYS.length)]);
     }
 
-    public static HbmDoorRedstoneMode redstoneModeFromStack(@NotNull final ItemStack stack) {
+    public static DoorRedstoneMode redstoneModeFromStack(@NotNull final ItemStack stack) {
         final CompoundTag tag = tagCopy(stack);
-        if (tag == null || !tag.contains(REDSTONE_MODE_TAG)) return HbmDoorRedstoneMode.DEFAULT;
-        return HbmDoorRedstoneMode.fromOrdinal(tag.getInt(REDSTONE_MODE_TAG));
+        if (tag == null || !tag.contains(REDSTONE_MODE_TAG)) return DoorRedstoneMode.DEFAULT;
+        return DoorRedstoneMode.fromOrdinal(tag.getInt(REDSTONE_MODE_TAG));
     }
 
     public static void setRedstoneMode(@NotNull final ItemStack stack,
-                                       @NotNull final HbmDoorRedstoneMode redstoneMode) {
-        if (redstoneMode == HbmDoorRedstoneMode.DEFAULT) {
+                                       @NotNull final DoorRedstoneMode redstoneMode) {
+        if (redstoneMode == DoorRedstoneMode.DEFAULT) {
             final CompoundTag tag = tagCopy(stack);
             if (tag != null) {
                 tag.remove(REDSTONE_MODE_TAG);
@@ -138,21 +153,12 @@ public class HbmVaultDoorBlockItem extends TooltipBlockItem {
         writeTag(stack, tag);
     }
 
-    public static Component redstoneModeName(@NotNull final HbmDoorRedstoneMode redstoneMode) {
+    public static Component redstoneModeName(@NotNull final DoorRedstoneMode redstoneMode) {
         return redstoneMode.displayName();
     }
 
     public static DoorAccessLevel accessLevelFromStack(@NotNull final ItemStack stack) {
         return DoorAccessHelper.accessLevelFromStack(stack);
-    }
-
-    public static void setAccessLevel(@NotNull final ItemStack stack,
-                                      @NotNull final DoorAccessLevel accessLevel) {
-        DoorAccessHelper.setAccessLevel(stack, accessLevel);
-    }
-
-    public static Component accessLevelName(@NotNull final DoorAccessLevel accessLevel) {
-        return DoorAccessHelper.accessLevelName(accessLevel);
     }
 
     private static CompoundTag tagCopy(@NotNull final ItemStack stack) {
@@ -199,7 +205,7 @@ public class HbmVaultDoorBlockItem extends TooltipBlockItem {
 
         tooltip.add(Component.translatable("tooltip.malisisdoorsreborn.label.skin", skinName(skinIndexFromStack(stack))).withStyle(ChatFormatting.WHITE));
         tooltip.add(redstoneTooltip);
-        tooltip.add(Component.translatable("tooltip.malisisdoorsreborn.label.access", accessLevelName(accessLevel)).withStyle(ChatFormatting.WHITE));
+        DoorAccessHelper.appendAccessTooltip(tooltip, stack);
     }
 
     @SuppressWarnings("removal")

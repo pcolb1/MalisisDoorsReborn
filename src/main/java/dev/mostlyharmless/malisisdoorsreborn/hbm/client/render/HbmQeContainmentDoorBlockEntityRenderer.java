@@ -60,6 +60,11 @@ public class HbmQeContainmentDoorBlockEntityRenderer implements BlockEntityRende
     }
 
     @Override
+    public boolean shouldRenderOffScreen(@NotNull final HbmQeContainmentDoorBlockEntity be) {
+        return true;
+    }
+
+    @Override
     public void render(@NotNull final HbmQeContainmentDoorBlockEntity be,
                        final float partialTick,
                        @NotNull final PoseStack poseStack,

@@ -54,8 +54,10 @@ public class HbmScrewdriverItem extends TooltipItem {
         return HbmScrewdriverMode.values()[Math.floorMod(tag.getInt(MODE_TAG), HbmScrewdriverMode.values().length)];
     }
 
-    public static @NotNull HbmScrewdriverMode cycleMode(@NotNull final ItemStack stack) {
-        final HbmScrewdriverMode mode = modeFromStack(stack).next();
+    public static @NotNull HbmScrewdriverMode cycleMode(@NotNull final ItemStack stack,
+                                                                final boolean forward) {
+        final HbmScrewdriverMode currentMode = modeFromStack(stack);
+        final HbmScrewdriverMode mode = forward ? currentMode.next() : currentMode.previous();
         final CustomData data = stack.get(DataComponents.CUSTOM_DATA);
         final CompoundTag tag = data == null ? new CompoundTag() : data.copyTag();
         tag.putInt(MODE_TAG, mode.ordinal());

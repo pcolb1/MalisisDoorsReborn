@@ -57,6 +57,11 @@ public class HbmWaterDoorBlockEntityRenderer implements BlockEntityRenderer<HbmW
     }
 
     @Override
+    public boolean shouldRenderOffScreen(@NotNull final HbmWaterDoorBlockEntity be) {
+        return true;
+    }
+
+    @Override
     public void render(@NotNull final HbmWaterDoorBlockEntity be,
                        final float partialTick,
                        @NotNull final PoseStack poseStack,

@@ -31,7 +31,12 @@ import java.util.Locale;
 
 public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<HbmVehicleDoorBlockEntity> {
 
-    private static final ResourceLocation TEXTURE = ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vehicle_door.png");
+    private static final ResourceLocation[] TEXTURES = {
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vehicle_door.png"),
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vehicle_door_black.png"),
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vehicle_door_blue.png"),
+            ResourceLocation.parse(MdrDefaults.MOD_ID + ":textures/models/pheodoors/vehicle_door_red.png")
+    };
     private static final ObjModel MODEL = ObjModel.load("assets/malisisdoorsreborn/models/pheodoors/vehicle_door.obj");
     private static final float MAX_OPEN = 3.0F;
     private static final float CLIP_MIN_X = -3.4375F;
@@ -52,6 +57,11 @@ public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<Hb
                 pos.getX() - 6.0D, pos.getY(), pos.getZ() - 6.0D,
                 pos.getX() + 6.0D, pos.getY() + 7.0D, pos.getZ() + 6.0D
         );
+    }
+
+    @Override
+    public boolean shouldRenderOffScreen(@NotNull final HbmVehicleDoorBlockEntity be) {
+        return true;
     }
 
     @Override
@@ -104,7 +114,8 @@ public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<Hb
                                     @NotNull final Direction facing,
                                     final float open,
                                     final int skinIndex) {
-        final VertexConsumer vertexConsumer = buffer.getBuffer(RenderType.entityCutoutNoCull(TEXTURE));
+        final ResourceLocation texture = TEXTURES[Math.floorMod(skinIndex, TEXTURES.length)];
+        final VertexConsumer vertexConsumer = buffer.getBuffer(RenderType.entityCutoutNoCull(texture));
 
         poseStack.pushPose();
         poseStack.translate(0.5F, 0.0F, 0.5F);
