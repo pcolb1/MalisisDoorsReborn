@@ -22,7 +22,7 @@ public final class HbmScrewdriverClientHooks {
     @SubscribeEvent
     public static void onMouseScroll(final InputEvent.MouseScrollingEvent event) {
         final Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.screen != null) return;
+        if (minecraft.gui.screen() != null) return;
         final Player player = minecraft.player;
         if (player == null) return;
         if (!player.isShiftKeyDown()) return;

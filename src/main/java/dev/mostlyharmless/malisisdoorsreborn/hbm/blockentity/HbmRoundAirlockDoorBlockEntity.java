@@ -160,17 +160,6 @@ public class HbmRoundAirlockDoorBlockEntity extends BlockEntity implements Acces
     }
 
 
-    private void reconcileFootprintOnce(@NotNull final Level level,
-                                        @NotNull final BlockPos pos,
-                                        @NotNull final BlockState state) {
-        if (footprintReconciled || level.isClientSide()) return;
-        if (state.getBlock() instanceof final HbmRoundAirlockDoorBlock doorBlock) {
-            doorBlock.reconcileLegacyFootprint(level, pos, state);
-        }
-        footprintReconciled = true;
-    }
-
-
     public int getSkinIndex() {
         return skinIndex;
     }
@@ -264,6 +253,17 @@ public class HbmRoundAirlockDoorBlockEntity extends BlockEntity implements Acces
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
         }
         return skinIndex;
+    }
+
+
+    private void reconcileFootprintOnce(@NotNull final Level level,
+                                        @NotNull final BlockPos pos,
+                                        @NotNull final BlockState state) {
+        if (footprintReconciled || level.isClientSide()) return;
+        if (state.getBlock() instanceof final HbmRoundAirlockDoorBlock doorBlock) {
+            doorBlock.reconcileLegacyFootprint(level, pos, state);
+        }
+        footprintReconciled = true;
     }
 
 
