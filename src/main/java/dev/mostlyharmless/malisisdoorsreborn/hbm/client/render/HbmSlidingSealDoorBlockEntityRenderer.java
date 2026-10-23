@@ -41,7 +41,9 @@ public class HbmSlidingSealDoorBlockEntityRenderer implements BlockEntityRendere
 
     private static final Identifier[] TEXTURES = {
             Identifier.fromNamespaceAndPath(MdrDefaults.MOD_ID, "block/hbm_sliding_seal_door_skin_default"),
-            Identifier.fromNamespaceAndPath(MdrDefaults.MOD_ID, "block/hbm_sliding_seal_door_skin_trefoil")
+            Identifier.fromNamespaceAndPath(MdrDefaults.MOD_ID, "block/hbm_sliding_seal_door_skin_trefoil"),
+            Identifier.fromNamespaceAndPath(MdrDefaults.MOD_ID, "block/hbm_sliding_seal_door_skin_clean"),
+            Identifier.fromNamespaceAndPath(MdrDefaults.MOD_ID, "block/hbm_sliding_seal_door_skin_skull")
     };
     private static final Identifier BLOCK_ATLAS_ID = Identifier.withDefaultNamespace("blocks");
     private static final ObjModel MODEL = ObjModel.load("assets/malisisdoorsreborn/models/pheodoors/seal_door.obj");
@@ -54,6 +56,11 @@ public class HbmSlidingSealDoorBlockEntityRenderer implements BlockEntityRendere
 
     @SuppressWarnings("unused")
     public HbmSlidingSealDoorBlockEntityRenderer(final BlockEntityRendererProvider.Context context) {}
+
+    @Override
+    public boolean shouldRenderOffScreen() {
+        return true;
+    }
 
     @Override
     public int getViewDistance() {

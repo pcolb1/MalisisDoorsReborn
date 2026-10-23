@@ -1,8 +1,10 @@
 package dev.mostlyharmless.malisisdoorsreborn.hbm.blockentity;
 
 import dev.mostlyharmless.malisisdoorsreborn.access.AccessControlledDoor;
+import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessHelper;
 import dev.mostlyharmless.malisisdoorsreborn.access.DoorAccessLevel;
-import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmDoorRedstoneMode;
+import dev.mostlyharmless.malisisdoorsreborn.block.AccessCardReaderCardLevelMode;
+import dev.mostlyharmless.malisisdoorsreborn.common.DoorRedstoneMode;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.block.HbmSlidingSealDoorBlock;
 import dev.mostlyharmless.malisisdoorsreborn.hbm.item.HbmSlidingSealDoorBlockItem;
 import dev.mostlyharmless.malisisdoorsreborn.registry.MdrBlockEntities;
@@ -38,8 +40,9 @@ public class HbmSlidingSealDoorBlockEntity extends BlockEntity implements Access
     private int ticks = 0;
     private int previousTicks = 0;
     private int skinIndex = 0;
-    private HbmDoorRedstoneMode redstoneMode = HbmDoorRedstoneMode.DEFAULT;
+    private DoorRedstoneMode redstoneMode = DoorRedstoneMode.DEFAULT;
     private DoorAccessLevel accessLevel = DoorAccessLevel.DEFAULT;
+    private AccessCardReaderCardLevelMode cardLevelMode = AccessCardReaderCardLevelMode.defaultValue();
 
     public HbmSlidingSealDoorBlockEntity(final BlockPos pos, final BlockState state) {
         super(MdrBlockEntities.HBM_SLIDING_SEAL_DOOR.get(), pos, state);
@@ -135,8 +138,9 @@ public class HbmSlidingSealDoorBlockEntity extends BlockEntity implements Access
 
     private void loadShared(@NotNull final ValueInput input) {
         skinIndex = Math.floorMod(input.getIntOr("SkinIndex", 0), HbmSlidingSealDoorBlockItem.SKIN_COUNT);
-        redstoneMode = HbmDoorRedstoneMode.fromOrdinal(input.getIntOr("RedstoneMode", 0));
+        redstoneMode = DoorRedstoneMode.fromOrdinal(input.getIntOr("RedstoneMode", 0));
         accessLevel = DoorAccessLevel.fromOrdinal(input.getIntOr("AccessLevel", 0));
+        cardLevelMode = DoorAccessHelper.cardLevelModeFromInput(input, accessLevel);
     }
 
     public int getSkinIndex() {
@@ -151,6 +155,28 @@ public class HbmSlidingSealDoorBlockEntity extends BlockEntity implements Access
         }
     }
 
+    @Override
+    public @NotNull AccessCardReaderCardLevelMode getCardLevelMode() {
+        return cardLevelMode;
+    }
+
+    @Override
+    public void setCardLevelMode(@NotNull final AccessCardReaderCardLevelMode cardLevelMode) {
+        if (this.cardLevelMode == cardLevelMode) return;
+        this.cardLevelMode = cardLevelMode;
+        setChanged();
+        if (level != null) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
+        }
+    }
+
+    @Override
+    public @NotNull AccessCardReaderCardLevelMode cycleCardLevelMode() {
+        final AccessCardReaderCardLevelMode next = cardLevelMode.next();
+        setCardLevelMode(next);
+        return next;
+    }
+
     public int cycleSkin() {
         skinIndex = (skinIndex + 1) % HbmSlidingSealDoorBlockItem.SKIN_COUNT;
         setChanged();
@@ -160,11 +186,11 @@ public class HbmSlidingSealDoorBlockEntity extends BlockEntity implements Access
         return skinIndex;
     }
 
-    public HbmDoorRedstoneMode getRedstoneMode() {
+    public DoorRedstoneMode getRedstoneMode() {
         return redstoneMode;
     }
 
-    public void setRedstoneMode(@NotNull final HbmDoorRedstoneMode redstoneMode) {
+    public void setRedstoneMode(@NotNull final DoorRedstoneMode redstoneMode) {
         this.redstoneMode = redstoneMode;
         setChanged();
         if (level != null) {
@@ -172,7 +198,7 @@ public class HbmSlidingSealDoorBlockEntity extends BlockEntity implements Access
         }
     }
 
-    public HbmDoorRedstoneMode cycleRedstoneMode() {
+    public DoorRedstoneMode cycleRedstoneMode() {
         redstoneMode = redstoneMode.next();
         setChanged();
         if (level != null) {
@@ -211,6 +237,7 @@ public class HbmSlidingSealDoorBlockEntity extends BlockEntity implements Access
         output.putInt("SkinIndex", skinIndex);
         output.putInt("RedstoneMode", redstoneMode.ordinal());
         output.putInt("AccessLevel", accessLevel.ordinal());
+        output.putString(DoorAccessHelper.CARD_LEVEL_MODE_TAG, cardLevelMode.serializedName());
         output.putInt("Phase", phase.ordinal());
         output.putInt("Ticks", ticks);
     }

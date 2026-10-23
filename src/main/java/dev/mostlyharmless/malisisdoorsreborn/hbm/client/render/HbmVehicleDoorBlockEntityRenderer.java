@@ -38,7 +38,10 @@ import java.util.Locale;
 public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<HbmVehicleDoorBlockEntity, HbmVehicleDoorBlockEntityRenderer.VehicleDoorRenderState> {
 
     private static final Identifier[] TEXTURES = {
-            Identifier.fromNamespaceAndPath(MdrDefaults.MOD_ID, "block/hbm_vehicle_door_skin_default")
+            Identifier.fromNamespaceAndPath(MdrDefaults.MOD_ID, "block/hbm_vehicle_door_skin_default"),
+            Identifier.fromNamespaceAndPath(MdrDefaults.MOD_ID, "block/hbm_vehicle_door_skin_black"),
+            Identifier.fromNamespaceAndPath(MdrDefaults.MOD_ID, "block/hbm_vehicle_door_skin_blue"),
+            Identifier.fromNamespaceAndPath(MdrDefaults.MOD_ID, "block/hbm_vehicle_door_skin_red")
     };
     private static final Identifier BLOCK_ATLAS_ID = Identifier.withDefaultNamespace("blocks");
     private static final ObjModel MODEL = ObjModel.load("assets/malisisdoorsreborn/models/pheodoors/vehicle_door.obj");
@@ -48,6 +51,11 @@ public class HbmVehicleDoorBlockEntityRenderer implements BlockEntityRenderer<Hb
 
     @SuppressWarnings("unused")
     public HbmVehicleDoorBlockEntityRenderer(final BlockEntityRendererProvider.Context context) {}
+
+    @Override
+    public boolean shouldRenderOffScreen() {
+        return true;
+    }
 
     @Override
     public int getViewDistance() {
